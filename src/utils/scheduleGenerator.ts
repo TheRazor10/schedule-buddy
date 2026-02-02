@@ -101,62 +101,62 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
         continue;
       }
 
-      // Determine who MUST rest (legal requirements only)
-      const employeeRestPriority = positionEmployees.map((emp) => {
+      const minRequired = position.minPerDay;
+      
+      // Analyze each employee's situation
+      const employeeStatus = positionEmployees.map((emp) => {
         const empSchedule = scheduleMap.get(emp.id)!;
         const weeklyLimit = emp.isMinor ? 35 : 56;
         const currentWeekHours = weeklyHours[emp.id][weekIndex] || 0;
+        const targetHours = targetHoursPerEmployee[emp.id];
         
-        // Only force rest for LEGAL reasons (not target hours - business needs coverage)
+        // Legal reasons to force rest
         const mustRest = 
           consecutiveWorkDays[emp.id] >= 6 ||
           currentWeekHours >= weeklyLimit ||
           (isHolidayDay && emp.isMinor);
 
-        // Check if employee still needs hours to reach target
-        const reachedTarget = empSchedule.totalHours >= targetHoursPerEmployee[emp.id];
+        const reachedTarget = empSchedule.totalHours >= targetHours;
         
         return {
           employee: emp,
           mustRest,
           reachedTarget,
           totalHours: empSchedule.totalHours,
-          consecutiveDays: consecutiveWorkDays[emp.id],
+          targetHours,
+          hoursRemaining: targetHours - empSchedule.totalHours,
         };
       });
 
-      // Employees who MUST rest (legal requirements)
-      const mustRestEmployees = employeeRestPriority.filter((e) => e.mustRest);
+      // Split into groups
+      const mustRestGroup = employeeStatus.filter((e) => e.mustRest);
+      const canWorkGroup = employeeStatus.filter((e) => !e.mustRest);
       
-      // Employees who CAN work
-      const canWorkEmployees = employeeRestPriority.filter((e) => !e.mustRest);
+      // Sort canWorkGroup: prioritize those with MORE hours remaining (fewer hours worked)
+      // This ensures fair distribution - those behind get priority
+      canWorkGroup.sort((a, b) => b.hoursRemaining - a.hoursRemaining);
       
-      const minRequired = position.minPerDay;
-      
-      // CRITICAL: Ensure we always have minimum coverage
-      // Sort canWorkEmployees: those who need hours first, then by fewest hours worked
-      const sortedCanWork = [...canWorkEmployees].sort((a, b) => {
-        // Prioritize those who haven't reached target
-        if (a.reachedTarget !== b.reachedTarget) {
-          return a.reachedTarget ? 1 : -1; // Not reached target comes first
-        }
-        // Among same category, prioritize those with fewer hours
-        return a.totalHours - b.totalHours;
-      });
-      
-      // Determine working employees: at least minRequired must work
       const workingEmployees: Employee[] = [];
-      const restingEmployees: Employee[] = [...mustRestEmployees.map((e) => e.employee)];
+      const restingEmployees: Employee[] = mustRestGroup.map((e) => e.employee);
       
-      // First, assign workers to meet minimum coverage
-      for (const emp of sortedCanWork) {
+      // Step 1: Fill minimum coverage with employees who need the most hours
+      for (const emp of canWorkGroup) {
         if (workingEmployees.length < minRequired) {
           workingEmployees.push(emp.employee);
-        } else if (!emp.reachedTarget) {
-          // Extra workers who still need hours
+        }
+      }
+      
+      // Step 2: If coverage not met from canWork, we have a staffing problem
+      // (This means too many people on forced rest)
+      
+      // Step 3: Remaining canWork employees - work only if they haven't reached target
+      const remainingCanWork = canWorkGroup.slice(workingEmployees.length);
+      for (const emp of remainingCanWork) {
+        if (!emp.reachedTarget) {
+          // Still needs hours - work today
           workingEmployees.push(emp.employee);
         } else {
-          // Reached target and coverage is met - can rest
+          // Reached target - rest today
           restingEmployees.push(emp.employee);
         }
       }
