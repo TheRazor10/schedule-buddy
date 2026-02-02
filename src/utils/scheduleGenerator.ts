@@ -84,10 +84,12 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
   });
 
   // Calculate target hours for each employee based on contract ratio
+  // Use full working hours for part-time employees - they work the same number of days but shorter shifts
   const targetHoursPerEmployee: Record<string, number> = {};
   employees.forEach((emp) => {
-    const ratio = emp.contractHours / 8;
-    targetHoursPerEmployee[emp.id] = Math.round(monthData.workingHours * ratio);
+    // For minors and part-time workers, calculate based on their daily hours x working days
+    // A 7h/day employee should work ~7h x workingDays, not a reduced ratio
+    targetHoursPerEmployee[emp.id] = emp.contractHours * monthData.workingDays;
   });
 
   // Process each day of the month
@@ -130,12 +132,12 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
       const weeklyLimit = employee.isMinor ? 35 : 56;
       const reachedWeeklyLimit = currentWeekHours >= weeklyLimit;
 
-      // Check if employee has reached target hours
+      // Check if employee has reached target hours (with some buffer for balance)
       const reachedTargetHours = empSchedule.totalHours >= targetHoursPerEmployee[empId];
 
       // Determine if employee should rest today
-      const shouldRest = needsRest || reachedWeeklyLimit || reachedTargetHours || 
-        (isWeekendDay && empSchedule.totalWorkDays >= monthData.workingDays * (employee.contractHours / 8));
+      // Employees should work regularly - rest only when rules require it
+      const shouldRest = needsRest || reachedWeeklyLimit || reachedTargetHours;
 
       if (shouldRest || needs12HourRest) {
         empSchedule.entries[day] = { type: 'rest' };
