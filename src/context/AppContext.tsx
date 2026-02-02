@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { FirmSettings, Employee, MonthSchedule, Shift } from '@/types/schedule';
+import { FirmSettings, Employee, MonthSchedule, Position } from '@/types/schedule';
 
 interface AppState {
   firmSettings: FirmSettings;
@@ -11,9 +11,9 @@ interface AppState {
 
 interface AppContextType extends AppState {
   setFirmSettings: (settings: FirmSettings) => void;
-  addShift: (shift: Shift) => void;
-  updateShift: (id: string, shift: Partial<Shift>) => void;
-  removeShift: (id: string) => void;
+  addPosition: (position: Position) => void;
+  updatePosition: (id: string, position: Partial<Position>) => void;
+  removePosition: (id: string) => void;
   addEmployee: (employee: Employee) => void;
   updateEmployee: (id: string, employee: Partial<Employee>) => void;
   removeEmployee: (id: string) => void;
@@ -29,7 +29,7 @@ const defaultFirmSettings: FirmSettings = {
   operatingHoursStart: '08:00',
   operatingHoursEnd: '20:00',
   worksOnHolidays: false,
-  shifts: [],
+  positions: [],
 };
 
 const defaultState: AppState = {
@@ -49,35 +49,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, firmSettings: settings }));
   };
 
-  const addShift = (shift: Shift) => {
+  const addPosition = (position: Position) => {
     setState((prev) => ({
       ...prev,
       firmSettings: {
         ...prev.firmSettings,
-        shifts: [...prev.firmSettings.shifts, shift],
+        positions: [...prev.firmSettings.positions, position],
       },
     }));
   };
 
-  const updateShift = (id: string, shiftUpdate: Partial<Shift>) => {
+  const updatePosition = (id: string, positionUpdate: Partial<Position>) => {
     setState((prev) => ({
       ...prev,
       firmSettings: {
         ...prev.firmSettings,
-        shifts: prev.firmSettings.shifts.map((s) =>
-          s.id === id ? { ...s, ...shiftUpdate } : s
+        positions: prev.firmSettings.positions.map((p) =>
+          p.id === id ? { ...p, ...positionUpdate } : p
         ),
       },
     }));
   };
 
-  const removeShift = (id: string) => {
+  const removePosition = (id: string) => {
     setState((prev) => ({
       ...prev,
       firmSettings: {
         ...prev.firmSettings,
-        shifts: prev.firmSettings.shifts.filter((s) => s.id !== id),
+        positions: prev.firmSettings.positions.filter((p) => p.id !== id),
       },
+      // Also remove positionId from employees with this position
+      employees: prev.employees.map((e) =>
+        e.positionId === id ? { ...e, positionId: '' } : e
+      ),
     }));
   };
 
@@ -125,9 +129,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         ...state,
         setFirmSettings,
-        addShift,
-        updateShift,
-        removeShift,
+        addPosition,
+        updatePosition,
+        removePosition,
         addEmployee,
         updateEmployee,
         removeEmployee,

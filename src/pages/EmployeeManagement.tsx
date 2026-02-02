@@ -33,7 +33,7 @@ export default function EmployeeManagement() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [egn, setEgn] = useState('');
-  const [position, setPosition] = useState('');
+  const [positionId, setPositionId] = useState('');
   const [contractHours, setContractHours] = useState<string>('8');
   const [egnError, setEgnError] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -63,14 +63,14 @@ export default function EmployeeManagement() {
     setFirstName('');
     setLastName('');
     setEgn('');
-    setPosition('');
+    setPositionId('');
     setContractHours('8');
     setEgnError('');
     setEditingId(null);
   };
 
   const handleSubmit = () => {
-    if (!firstName.trim() || !lastName.trim() || !egn || !position.trim()) return;
+    if (!firstName.trim() || !lastName.trim() || !egn || !positionId) return;
     
     const validation = validateEGN(egn);
     if (!validation.valid) {
@@ -86,7 +86,7 @@ export default function EmployeeManagement() {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       egn,
-      position: position.trim(),
+      positionId,
       contractHours: parseInt(contractHours) as 2 | 4 | 6 | 7 | 8,
       isMinor,
       birthDate: birthDate || new Date(),
@@ -105,9 +105,14 @@ export default function EmployeeManagement() {
     setFirstName(employee.firstName);
     setLastName(employee.lastName);
     setEgn(employee.egn);
-    setPosition(employee.position);
+    setPositionId(employee.positionId);
     setContractHours(employee.contractHours.toString());
     setEditingId(employee.id);
+  };
+
+  const getPositionName = (posId: string) => {
+    const position = firmSettings.positions.find((p) => p.id === posId);
+    return position?.name || '—';
   };
 
   const isFormValid =
@@ -115,7 +120,7 @@ export default function EmployeeManagement() {
     lastName.trim() &&
     egn.length === 10 &&
     !egnError &&
-    position.trim();
+    positionId;
 
   const canContinue = employees.length > 0;
 
@@ -210,13 +215,25 @@ export default function EmployeeManagement() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="position">Длъжност *</Label>
-                <Input
-                  id="position"
-                  value={position}
-                  onChange={(e) => setPosition(e.target.value)}
-                  placeholder="Продавач"
-                />
+                <Label htmlFor="position">Позиция *</Label>
+                {firmSettings.positions.length === 0 ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+                    Първо добавете позиции в настройките на фирмата
+                  </div>
+                ) : (
+                  <Select value={positionId} onValueChange={setPositionId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Изберете позиция" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {firmSettings.positions.map((pos) => (
+                        <SelectItem key={pos.id} value={pos.id}>
+                          {pos.name} (мин. {pos.minPerDay}/ден)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -301,7 +318,7 @@ export default function EmployeeManagement() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Име</TableHead>
-                        <TableHead>Длъжност</TableHead>
+                        <TableHead>Позиция</TableHead>
                         <TableHead className="text-center">Часове</TableHead>
                         <TableHead className="text-center">Статус</TableHead>
                         <TableHead className="text-right">Действия</TableHead>
@@ -313,7 +330,7 @@ export default function EmployeeManagement() {
                           <TableCell className="font-medium">
                             {employee.firstName} {employee.lastName}
                           </TableCell>
-                          <TableCell>{employee.position}</TableCell>
+                          <TableCell>{getPositionName(employee.positionId)}</TableCell>
                           <TableCell className="text-center">
                             <Badge variant="outline">{employee.contractHours}ч</Badge>
                           </TableCell>

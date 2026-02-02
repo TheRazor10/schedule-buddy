@@ -7,13 +7,12 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Building2, Clock, ArrowRight } from 'lucide-react';
-import { Shift } from '@/types/schedule';
-import { calculateHours } from '@/utils/scheduleGenerator';
+import { Plus, Trash2, Building2, Clock, ArrowRight, Users } from 'lucide-react';
+import { Position } from '@/types/schedule';
 
 export default function FirmSetup() {
   const navigate = useNavigate();
-  const { firmSettings, setFirmSettings, addShift, updateShift, removeShift } = useAppContext();
+  const { firmSettings, setFirmSettings, addPosition, removePosition } = useAppContext();
   
   const [firmName, setFirmName] = useState(firmSettings.firmName);
   const [ownerName, setOwnerName] = useState(firmSettings.ownerName);
@@ -21,27 +20,22 @@ export default function FirmSetup() {
   const [operatingEnd, setOperatingEnd] = useState(firmSettings.operatingHoursEnd);
   const [worksOnHolidays, setWorksOnHolidays] = useState(firmSettings.worksOnHolidays);
 
-  // New shift form
-  const [newShiftName, setNewShiftName] = useState('');
-  const [newShiftStart, setNewShiftStart] = useState('08:00');
-  const [newShiftEnd, setNewShiftEnd] = useState('16:00');
+  // New position form
+  const [newPositionName, setNewPositionName] = useState('');
+  const [newMinPerDay, setNewMinPerDay] = useState('1');
 
-  const handleAddShift = () => {
-    if (!newShiftName.trim()) return;
+  const handleAddPosition = () => {
+    if (!newPositionName.trim()) return;
     
-    const hours = calculateHours(newShiftStart, newShiftEnd);
-    const newShift: Shift = {
+    const newPosition: Position = {
       id: crypto.randomUUID(),
-      name: newShiftName.trim(),
-      startTime: newShiftStart,
-      endTime: newShiftEnd,
-      hours,
+      name: newPositionName.trim(),
+      minPerDay: parseInt(newMinPerDay) || 1,
     };
     
-    addShift(newShift);
-    setNewShiftName('');
-    setNewShiftStart('08:00');
-    setNewShiftEnd('16:00');
+    addPosition(newPosition);
+    setNewPositionName('');
+    setNewMinPerDay('1');
   };
 
   const handleContinue = () => {
@@ -51,12 +45,12 @@ export default function FirmSetup() {
       operatingHoursStart: operatingStart,
       operatingHoursEnd: operatingEnd,
       worksOnHolidays,
-      shifts: firmSettings.shifts,
+      positions: firmSettings.positions,
     });
     navigate('/employees');
   };
 
-  const isValid = firmName.trim() && firmSettings.shifts.length > 0;
+  const isValid = firmName.trim() && firmSettings.positions.length > 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -161,36 +155,39 @@ export default function FirmSetup() {
             </CardContent>
           </Card>
 
-          {/* Shifts Card */}
+          {/* Positions Card */}
           <Card>
             <CardHeader>
-              <CardTitle>Смени *</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Позиции *
+              </CardTitle>
               <CardDescription>
-                Определете смените, които ще използвате в графика. Добавете поне една смяна.
+                Определете позициите и минималния брой служители за всяка от тях на ден. 
+                Генераторът ще ротира почивните дни, като гарантира покритие.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Existing shifts */}
-              {firmSettings.shifts.length > 0 && (
+              {/* Existing positions */}
+              {firmSettings.positions.length > 0 && (
                 <div className="space-y-2">
-                  {firmSettings.shifts.map((shift) => (
+                  {firmSettings.positions.map((position) => (
                     <div
-                      key={shift.id}
+                      key={position.id}
                       className="flex items-center justify-between rounded-lg border bg-muted/30 p-3"
                     >
                       <div className="flex items-center gap-4">
                         <Badge variant="secondary" className="font-semibold">
-                          {shift.name}
+                          {position.name}
                         </Badge>
                         <span className="text-sm text-muted-foreground">
-                          {shift.startTime} - {shift.endTime}
+                          Мин. <strong>{position.minPerDay}</strong> на ден
                         </span>
-                        <Badge variant="outline">{shift.hours}ч</Badge>
                       </div>
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => removeShift(shift.id)}
+                        onClick={() => removePosition(position.id)}
                         className="h-8 w-8 text-destructive hover:bg-destructive/10"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -200,59 +197,49 @@ export default function FirmSetup() {
                 </div>
               )}
 
-              {/* Add new shift form */}
+              {/* Add new position form */}
               <div className="rounded-lg border border-dashed p-4">
-                <p className="mb-3 text-sm font-medium">Добави нова смяна</p>
-                <div className="grid gap-3 sm:grid-cols-4">
-                  <div className="space-y-1">
-                    <Label htmlFor="shiftName" className="text-xs">
-                      Име на смяната
+                <p className="mb-3 text-sm font-medium">Добави нова позиция</p>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-1 sm:col-span-2">
+                    <Label htmlFor="positionName" className="text-xs">
+                      Име на позицията
                     </Label>
                     <Input
-                      id="shiftName"
-                      value={newShiftName}
-                      onChange={(e) => setNewShiftName(e.target.value)}
-                      placeholder="Сутрешна"
+                      id="positionName"
+                      value={newPositionName}
+                      onChange={(e) => setNewPositionName(e.target.value)}
+                      placeholder="Бармани"
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="shiftStart" className="text-xs">
-                      Начало
+                    <Label htmlFor="minPerDay" className="text-xs">
+                      Мин. на ден
                     </Label>
                     <Input
-                      id="shiftStart"
-                      type="time"
-                      value={newShiftStart}
-                      onChange={(e) => setNewShiftStart(e.target.value)}
+                      id="minPerDay"
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={newMinPerDay}
+                      onChange={(e) => setNewMinPerDay(e.target.value)}
                     />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="shiftEnd" className="text-xs">
-                      Край
-                    </Label>
-                    <Input
-                      id="shiftEnd"
-                      type="time"
-                      value={newShiftEnd}
-                      onChange={(e) => setNewShiftEnd(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex items-end">
-                    <Button
-                      onClick={handleAddShift}
-                      disabled={!newShiftName.trim()}
-                      className="w-full"
-                    >
-                      <Plus className="mr-1 h-4 w-4" />
-                      Добави
-                    </Button>
                   </div>
                 </div>
-                {newShiftName && (
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Продължителност: {calculateHours(newShiftStart, newShiftEnd)} часа
-                  </p>
-                )}
+                <Button
+                  onClick={handleAddPosition}
+                  disabled={!newPositionName.trim()}
+                  className="mt-3 w-full"
+                >
+                  <Plus className="mr-1 h-4 w-4" />
+                  Добави позиция
+                </Button>
+              </div>
+
+              {/* Example hint */}
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                <strong>Пример:</strong> Ако имате 3 бармани и зададете минимум 2 на ден, 
+                генераторът ще ротира почивните дни така, че винаги да има 2 бармани на работа.
               </div>
             </CardContent>
           </Card>

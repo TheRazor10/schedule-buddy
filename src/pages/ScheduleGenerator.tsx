@@ -48,10 +48,16 @@ export default function ScheduleGenerator() {
     navigate('/schedule');
   };
 
-  const canGenerate = firmSettings.shifts.length > 0 && employees.length > 0;
+  const canGenerate = firmSettings.positions.length > 0 && employees.length > 0;
 
   // Get holidays for selected month
   const holidaysInMonth = monthData.holidays;
+
+  // Group employees by position for summary
+  const employeesByPosition = firmSettings.positions.map((pos) => ({
+    position: pos,
+    employees: employees.filter((e) => e.positionId === pos.id),
+  }));
 
   return (
     <div className="min-h-screen bg-background">
@@ -181,24 +187,52 @@ export default function ScheduleGenerator() {
               <CardDescription>Преглед на данните преди генериране</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Фирма</p>
                   <p className="font-medium">{firmSettings.firmName || '—'}</p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Служители</p>
+                  <p className="text-sm text-muted-foreground">Общо служители</p>
                   <p className="font-medium">{employees.length} служители</p>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Смени</p>
-                  <div className="flex flex-wrap gap-1">
-                    {firmSettings.shifts.map((shift) => (
-                      <Badge key={shift.id} variant="secondary">
-                        {shift.name} ({shift.hours}ч)
-                      </Badge>
-                    ))}
-                  </div>
+              </div>
+
+              {/* Positions breakdown */}
+              <div className="mt-4 space-y-2">
+                <p className="text-sm font-medium">Позиции и покритие:</p>
+                <div className="space-y-2">
+                  {employeesByPosition.map(({ position, employees: posEmployees }) => {
+                    const hasEnough = posEmployees.length >= position.minPerDay;
+                    return (
+                      <div
+                        key={position.id}
+                        className={`flex items-center justify-between rounded-lg border p-3 ${
+                          hasEnough ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary">{position.name}</Badge>
+                          <span className="text-sm text-muted-foreground">
+                            {posEmployees.length} служители
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">
+                            Мин. на ден: <strong>{position.minPerDay}</strong>
+                          </span>
+                          {hasEnough ? (
+                            <Badge className="bg-green-100 text-green-700">OK</Badge>
+                          ) : (
+                            <Badge className="bg-amber-100 text-amber-700">
+                              <AlertTriangle className="mr-1 h-3 w-3" />
+                              Недостиг
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -206,7 +240,7 @@ export default function ScheduleGenerator() {
                 <div className="mt-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive">
                   <p className="font-medium">Не може да се генерира график</p>
                   <ul className="mt-1 list-inside list-disc text-sm">
-                    {firmSettings.shifts.length === 0 && <li>Добавете поне една смяна</li>}
+                    {firmSettings.positions.length === 0 && <li>Добавете поне една позиция</li>}
                     {employees.length === 0 && <li>Добавете поне един служител</li>}
                   </ul>
                 </div>
