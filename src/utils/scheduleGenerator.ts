@@ -107,20 +107,19 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
         const weeklyLimit = emp.isMinor ? 35 : 56;
         const currentWeekHours = weeklyHours[emp.id][weekIndex] || 0;
         
-        // Only force rest for legal/target reasons
+        // Only force rest for LEGAL reasons (not target hours - business needs coverage)
         const mustRest = 
           consecutiveWorkDays[emp.id] >= 6 ||
           currentWeekHours >= weeklyLimit ||
-          empSchedule.totalHours >= targetHoursPerEmployee[emp.id] ||
           (isHolidayDay && emp.isMinor);
 
         // Check if employee still needs hours to reach target
-        const needsMoreHours = empSchedule.totalHours < targetHoursPerEmployee[emp.id];
+        const reachedTarget = empSchedule.totalHours >= targetHoursPerEmployee[emp.id];
         
         return {
           employee: emp,
           mustRest,
-          needsMoreHours,
+          reachedTarget,
           totalHours: empSchedule.totalHours,
           consecutiveDays: consecutiveWorkDays[emp.id],
         };
@@ -132,31 +131,36 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
       // Employees who CAN work
       const canWorkEmployees = employeeRestPriority.filter((e) => !e.mustRest);
       
-      // KEY CHANGE: Only rest if you MUST rest or you've reached target hours
-      // If you still need hours, you work - even if others in your position are also working
-      let restingEmployees: Employee[] = mustRestEmployees.map((e) => e.employee);
-      
-      // Only add voluntary rest for employees who have reached their target hours
-      // AND we still have enough coverage (minPerDay)
-      const workingCount = canWorkEmployees.length;
       const minRequired = position.minPerDay;
       
-      if (workingCount > minRequired) {
-        // We have more workers than needed - give rest to those who reached target
-        const reachedTarget = canWorkEmployees.filter((e) => !e.needsMoreHours);
-        const stillNeedHours = canWorkEmployees.filter((e) => e.needsMoreHours);
-        
-        // Calculate how many can rest while maintaining coverage
-        const maxCanRest = workingCount - minRequired;
-        
-        // Prioritize rest for those who reached target (sort by most hours first)
-        const sortedReachedTarget = [...reachedTarget].sort((a, b) => b.totalHours - a.totalHours);
-        
-        for (let i = 0; i < Math.min(maxCanRest, sortedReachedTarget.length); i++) {
-          restingEmployees.push(sortedReachedTarget[i].employee);
+      // CRITICAL: Ensure we always have minimum coverage
+      // Sort canWorkEmployees: those who need hours first, then by fewest hours worked
+      const sortedCanWork = [...canWorkEmployees].sort((a, b) => {
+        // Prioritize those who haven't reached target
+        if (a.reachedTarget !== b.reachedTarget) {
+          return a.reachedTarget ? 1 : -1; // Not reached target comes first
+        }
+        // Among same category, prioritize those with fewer hours
+        return a.totalHours - b.totalHours;
+      });
+      
+      // Determine working employees: at least minRequired must work
+      const workingEmployees: Employee[] = [];
+      const restingEmployees: Employee[] = [...mustRestEmployees.map((e) => e.employee)];
+      
+      // First, assign workers to meet minimum coverage
+      for (const emp of sortedCanWork) {
+        if (workingEmployees.length < minRequired) {
+          workingEmployees.push(emp.employee);
+        } else if (!emp.reachedTarget) {
+          // Extra workers who still need hours
+          workingEmployees.push(emp.employee);
+        } else {
+          // Reached target and coverage is met - can rest
+          restingEmployees.push(emp.employee);
         }
       }
-
+      
       const restingIds = new Set(restingEmployees.map((e) => e.id));
 
       // Assign work or rest for each employee in this position
