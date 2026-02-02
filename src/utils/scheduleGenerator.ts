@@ -101,55 +101,60 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
         continue;
       }
 
-      // Determine how many employees need to work and rest
-      const minRequired = position.minPerDay;
-      const totalInPosition = positionEmployees.length;
-      const restingCount = Math.max(0, totalInPosition - minRequired);
-
-      // Sort employees by priority for rest:
-      // 1. Employees who MUST rest (6 consecutive days, weekly limit, minor holiday)
-      // 2. Employees who have worked more hours (fairness)
-      // 3. Rotate using rotation index
-      
+      // Determine who MUST rest (legal requirements only)
       const employeeRestPriority = positionEmployees.map((emp) => {
         const empSchedule = scheduleMap.get(emp.id)!;
         const weeklyLimit = emp.isMinor ? 35 : 56;
         const currentWeekHours = weeklyHours[emp.id][weekIndex] || 0;
         
+        // Only force rest for legal/target reasons
         const mustRest = 
           consecutiveWorkDays[emp.id] >= 6 ||
           currentWeekHours >= weeklyLimit ||
           empSchedule.totalHours >= targetHoursPerEmployee[emp.id] ||
           (isHolidayDay && emp.isMinor);
+
+        // Check if employee still needs hours to reach target
+        const needsMoreHours = empSchedule.totalHours < targetHoursPerEmployee[emp.id];
         
         return {
           employee: emp,
           mustRest,
+          needsMoreHours,
           totalHours: empSchedule.totalHours,
           consecutiveDays: consecutiveWorkDays[emp.id],
         };
       });
 
-      // First, mark those who MUST rest
+      // Employees who MUST rest (legal requirements)
       const mustRestEmployees = employeeRestPriority.filter((e) => e.mustRest);
+      
+      // Employees who CAN work
       const canWorkEmployees = employeeRestPriority.filter((e) => !e.mustRest);
-
-      // Determine who rests today using rotation for fairness
+      
+      // KEY CHANGE: Only rest if you MUST rest or you've reached target hours
+      // If you still need hours, you work - even if others in your position are also working
       let restingEmployees: Employee[] = mustRestEmployees.map((e) => e.employee);
       
-      // If we need more resting employees for coverage math, pick from canWork with highest hours
-      const additionalRestNeeded = Math.max(0, restingCount - restingEmployees.length);
-      if (additionalRestNeeded > 0 && canWorkEmployees.length > additionalRestNeeded) {
-        // Sort by hours worked (more hours = higher priority for rest)
-        const sorted = [...canWorkEmployees].sort((a, b) => b.totalHours - a.totalHours);
+      // Only add voluntary rest for employees who have reached their target hours
+      // AND we still have enough coverage (minPerDay)
+      const workingCount = canWorkEmployees.length;
+      const minRequired = position.minPerDay;
+      
+      if (workingCount > minRequired) {
+        // We have more workers than needed - give rest to those who reached target
+        const reachedTarget = canWorkEmployees.filter((e) => !e.needsMoreHours);
+        const stillNeedHours = canWorkEmployees.filter((e) => e.needsMoreHours);
         
-        // Use rotation to pick who rests
-        const rotation = rotationIndex[position.id];
-        for (let i = 0; i < additionalRestNeeded; i++) {
-          const idx = (rotation + i) % sorted.length;
-          restingEmployees.push(sorted[idx].employee);
+        // Calculate how many can rest while maintaining coverage
+        const maxCanRest = workingCount - minRequired;
+        
+        // Prioritize rest for those who reached target (sort by most hours first)
+        const sortedReachedTarget = [...reachedTarget].sort((a, b) => b.totalHours - a.totalHours);
+        
+        for (let i = 0; i < Math.min(maxCanRest, sortedReachedTarget.length); i++) {
+          restingEmployees.push(sortedReachedTarget[i].employee);
         }
-        rotationIndex[position.id] = (rotation + additionalRestNeeded) % canWorkEmployees.length;
       }
 
       const restingIds = new Set(restingEmployees.map((e) => e.id));
