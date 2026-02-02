@@ -1,20 +1,26 @@
 import * as XLSX from 'xlsx';
-import { MonthSchedule, Employee, Shift } from '@/types/schedule';
+import { MonthSchedule, Employee, Position } from '@/types/schedule';
 import { getMonthNameEn, getDaysInMonth } from '@/data/bulgarianCalendar2026';
 
 interface ExportOptions {
   schedule: MonthSchedule;
   employees: Employee[];
-  shifts: Shift[];
+  positions: Position[];
   firmName: string;
 }
 
 export function exportScheduleToExcel(options: ExportOptions): void {
-  const { schedule, employees, shifts, firmName } = options;
+  const { schedule, employees, positions, firmName } = options;
   const { month, year, employeeSchedules } = schedule;
 
   const daysInMonth = getDaysInMonth(month, year);
   const monthName = getMonthNameEn(month);
+
+  // Helper to get position name
+  const getPositionName = (positionId: string) => {
+    const position = positions.find((p) => p.id === positionId);
+    return position?.name || '—';
+  };
 
   // Create workbook
   const wb = XLSX.utils.book_new();
@@ -22,7 +28,7 @@ export function exportScheduleToExcel(options: ExportOptions): void {
   // Build header row: Name | Position | Contract | Day 1 | Day 2 | ... | Total Hours | Rest Days | Status
   const headers = [
     'Служител',
-    'Длъжност',
+    'Позиция',
     'Договор (ч)',
     ...Array.from({ length: daysInMonth }, (_, i) => `${i + 1}`),
     'Общо часове',
@@ -39,7 +45,7 @@ export function exportScheduleToExcel(options: ExportOptions): void {
 
     const row: (string | number)[] = [
       `${employee.firstName} ${employee.lastName}`,
-      employee.position,
+      getPositionName(employee.positionId),
       employee.contractHours,
     ];
 
@@ -52,8 +58,8 @@ export function exportScheduleToExcel(options: ExportOptions): void {
         row.push('ПР'); // Празник
       } else if (entry.type === 'rest') {
         row.push('П'); // Почивка
-      } else if (entry.type === 'shift') {
-        row.push(entry.shiftName || entry.shiftId || 'Р'); // Работа
+      } else if (entry.type === 'work') {
+        row.push('Р'); // Работа
       }
     }
 
@@ -89,7 +95,7 @@ export function exportScheduleToExcel(options: ExportOptions): void {
     ['Легенда', ''],
     ['ПР', 'Празник'],
     ['П', 'Почивка'],
-    ...shifts.map((s) => [s.name, `${s.startTime} - ${s.endTime} (${s.hours}ч)`]),
+    ['Р', 'Работа'],
     ['', ''],
     ['✓', 'Съответства на изискванията'],
     ['⚠', 'Има предупреждения'],

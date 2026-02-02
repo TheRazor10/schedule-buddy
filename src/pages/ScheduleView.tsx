@@ -59,7 +59,7 @@ export default function ScheduleView() {
     exportScheduleToExcel({
       schedule,
       employees,
-      shifts: firmSettings.shifts,
+      positions: firmSettings.positions,
       firmName: firmSettings.firmName,
     });
   };
@@ -72,6 +72,11 @@ export default function ScheduleView() {
   const getDayName = (dayOfWeek: number) => {
     const names = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
     return names[dayOfWeek];
+  };
+
+  const getPositionName = (positionId: string) => {
+    const position = firmSettings.positions.find((p) => p.id === positionId);
+    return position?.name || '—';
   };
 
   return (
@@ -115,14 +120,10 @@ export default function ScheduleView() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-4">
-              {firmSettings.shifts.map((shift) => (
-                <div key={shift.id} className="flex items-center gap-2">
-                  <div className="h-6 w-6 rounded bg-green-500" />
-                  <span className="text-sm">
-                    <strong>{shift.name}</strong> ({shift.startTime}-{shift.endTime}, {shift.hours}ч)
-                  </span>
-                </div>
-              ))}
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-6 rounded bg-green-500" />
+                <span className="text-sm">Работа</span>
+              </div>
               <div className="flex items-center gap-2">
                 <div className="h-6 w-6 rounded bg-red-400" />
                 <span className="text-sm">Почивка</span>
@@ -188,7 +189,7 @@ export default function ScheduleView() {
                           {employee.firstName} {employee.lastName}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {employee.position}
+                          {getPositionName(employee.positionId)}
                         </div>
                       </TableCell>
                       <TableCell className="sticky left-[150px] z-10 bg-background text-center">
@@ -214,10 +215,10 @@ export default function ScheduleView() {
                           bgColor = 'bg-red-400';
                           textColor = 'text-red-900';
                           content = 'П';
-                        } else if (entry.type === 'shift') {
+                        } else if (entry.type === 'work') {
                           bgColor = 'bg-green-500';
                           textColor = 'text-white';
-                          content = entry.shiftName?.substring(0, 2).toUpperCase() || 'Р';
+                          content = 'Р';
                         }
 
                         return (
@@ -241,10 +242,8 @@ export default function ScheduleView() {
                                 </div>
                               </TooltipTrigger>
                               <TooltipContent>
-                                {entry?.type === 'shift' && (
-                                  <p>
-                                    {entry.shiftName} ({entry.hours}ч)
-                                  </p>
+                                {entry?.type === 'work' && (
+                                  <p>Работа ({entry.hours}ч)</p>
                                 )}
                                 {entry?.type === 'rest' && <p>Почивка</p>}
                                 {entry?.type === 'holiday' && <p>Официален празник</p>}
@@ -302,6 +301,7 @@ export default function ScheduleView() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Служител</TableHead>
+                  <TableHead>Позиция</TableHead>
                   <TableHead className="text-center">Договор</TableHead>
                   <TableHead className="text-center">Работни дни</TableHead>
                   <TableHead className="text-center">Общо часове</TableHead>
@@ -324,6 +324,7 @@ export default function ScheduleView() {
                           </Badge>
                         )}
                       </TableCell>
+                      <TableCell>{getPositionName(employee.positionId)}</TableCell>
                       <TableCell className="text-center">{employee.contractHours}ч</TableCell>
                       <TableCell className="text-center">{empSchedule.totalWorkDays}</TableCell>
                       <TableCell className="text-center">{empSchedule.totalHours}ч</TableCell>

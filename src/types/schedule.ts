@@ -1,11 +1,9 @@
 // Bulgarian Work Schedule Types
 
-export interface Shift {
+export interface Position {
   id: string;
   name: string;
-  startTime: string; // HH:mm format
-  endTime: string;   // HH:mm format
-  hours: number;     // Calculated from start/end
+  minPerDay: number; // Minimum employees needed per day for this position
 }
 
 export interface FirmSettings {
@@ -14,7 +12,7 @@ export interface FirmSettings {
   operatingHoursStart: string; // HH:mm
   operatingHoursEnd: string;   // HH:mm
   worksOnHolidays: boolean;
-  shifts: Shift[];
+  positions: Position[];
 }
 
 export interface Employee {
@@ -22,19 +20,17 @@ export interface Employee {
   firstName: string;
   lastName: string;
   egn: string;          // 10-digit Bulgarian ID
-  position: string;
+  positionId: string;   // Reference to Position
   contractHours: 2 | 4 | 6 | 7 | 8;
   isMinor: boolean;     // Calculated from EGN
   birthDate: Date;      // Extracted from EGN
 }
 
-export type ScheduleEntryType = 'shift' | 'rest' | 'holiday';
+export type ScheduleEntryType = 'work' | 'rest' | 'holiday';
 
 export interface ScheduleEntry {
   type: ScheduleEntryType;
-  shiftId?: string;      // Only if type === 'shift'
-  shiftName?: string;    // Display name
-  hours?: number;        // Hours worked
+  hours?: number;        // Hours worked (from contract)
 }
 
 export interface EmployeeSchedule {
