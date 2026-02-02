@@ -23,7 +23,7 @@ export interface Employee {
   lastName: string;
   egn: string;          // 10-digit Bulgarian ID
   position: string;
-  contractHours: 2 | 4 | 6 | 8;
+  contractHours: 2 | 4 | 6 | 7 | 8;
   isMinor: boolean;     // Calculated from EGN
   birthDate: Date;      // Extracted from EGN
 }

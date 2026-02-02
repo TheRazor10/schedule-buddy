@@ -46,6 +46,14 @@ export default function EmployeeManagement() {
     if (cleaned.length === 10) {
       const validation = validateEGN(cleaned);
       setEgnError(validation.valid ? '' : validation.error || 'Невалидно ЕГН');
+      
+      // Auto-adjust contract hours for minors (max 7 hours)
+      if (validation.valid) {
+        const isMinor = isMinorFromEGN(cleaned, new Date(2026, 0, 1));
+        if (isMinor && parseInt(contractHours) > 7) {
+          setContractHours('7');
+        }
+      }
     } else {
       setEgnError('');
     }
@@ -79,7 +87,7 @@ export default function EmployeeManagement() {
       lastName: lastName.trim(),
       egn,
       position: position.trim(),
-      contractHours: parseInt(contractHours) as 2 | 4 | 6 | 8,
+      contractHours: parseInt(contractHours) as 2 | 4 | 6 | 7 | 8,
       isMinor,
       birthDate: birthDate || new Date(),
     };
@@ -213,17 +221,39 @@ export default function EmployeeManagement() {
 
               <div className="space-y-2">
                 <Label htmlFor="contractHours">Договорни часове *</Label>
-                <Select value={contractHours} onValueChange={setContractHours}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="8">8 часа (пълен работен ден)</SelectItem>
-                    <SelectItem value="6">6 часа</SelectItem>
-                    <SelectItem value="4">4 часа (половин работен ден)</SelectItem>
-                    <SelectItem value="2">2 часа</SelectItem>
-                  </SelectContent>
-                </Select>
+                {(() => {
+                  const isMinor = egn.length === 10 && !egnError && isMinorFromEGN(egn, new Date(2026, 0, 1));
+                  return (
+                    <>
+                      <Select 
+                        value={contractHours} 
+                        onValueChange={(value) => {
+                          // Prevent minors from selecting more than 7 hours
+                          if (isMinor && parseInt(value) > 7) return;
+                          setContractHours(value);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="8" disabled={isMinor}>
+                            8 часа (пълен работен ден) {isMinor && '(недостъпно за непълнолетни)'}
+                          </SelectItem>
+                          <SelectItem value="7">7 часа (максимум за непълнолетни)</SelectItem>
+                          <SelectItem value="6">6 часа</SelectItem>
+                          <SelectItem value="4">4 часа (половин работен ден)</SelectItem>
+                          <SelectItem value="2">2 часа</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {isMinor && (
+                        <p className="text-xs text-amber-600">
+                          Непълнолетните служители могат да работят максимум 7 часа на ден
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
 
               <div className="flex gap-2">
