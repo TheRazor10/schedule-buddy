@@ -5,7 +5,7 @@ import {
   MonthSchedule,
   Position,
 } from '@/types/schedule';
-import { getMonthData, getDaysInMonth, isHoliday, isWeekend } from '@/data/bulgarianCalendar2026';
+import { getMonthData, getDaysInMonth, isHoliday } from '@/data/bulgarianCalendar2026';
 
 interface ScheduleGeneratorOptions {
   firmSettings: FirmSettings;
@@ -29,7 +29,80 @@ function getEmployeesByPosition(
 }
 
 /**
+ * Pre-plan rest days for a position using fair rotation
+ * Distributes rest days evenly across the month while ensuring minPerDay coverage
+ */
+function planRestDaysForPosition(
+  positionEmployees: Employee[],
+  minPerDay: number,
+  daysInMonth: number,
+  targetWorkDays: number,
+  holidayDays: Set<number>,
+  worksOnHolidays: boolean
+): Map<string, Set<number>> {
+  const restDaysMap = new Map<string, Set<number>>();
+  positionEmployees.forEach((emp) => restDaysMap.set(emp.id, new Set<number>()));
+
+  if (positionEmployees.length === 0) return restDaysMap;
+
+  // How many can rest each day while maintaining coverage
+  const canRestPerDay = Math.max(0, positionEmployees.length - minPerDay);
+  
+  if (canRestPerDay === 0) {
+    // Everyone must work every day - no rest possible from rotation
+    return restDaysMap;
+  }
+
+  // Calculate how many rest days each employee needs
+  // restDaysNeeded = totalDays - targetWorkDays - holidays (if firm closed)
+  const holidayCount = worksOnHolidays ? 0 : holidayDays.size;
+  const availableWorkDays = daysInMonth - holidayCount;
+  const restDaysNeeded = Math.max(0, availableWorkDays - targetWorkDays);
+
+  // Create rotation index for fair distribution
+  let rotationIndex = 0;
+  
+  // Process each day and assign rest using rotation
+  for (let day = 1; day <= daysInMonth; day++) {
+    // Skip holidays if firm doesn't work on them (these are automatic rest)
+    if (!worksOnHolidays && holidayDays.has(day)) {
+      continue;
+    }
+
+    // Assign rest to employees in rotation, up to canRestPerDay
+    let restsAssignedToday = 0;
+    const employeesToConsider = [...positionEmployees];
+    
+    // Sort by who has fewer rest days assigned (to keep it balanced)
+    employeesToConsider.sort((a, b) => {
+      const aRests = restDaysMap.get(a.id)!.size;
+      const bRests = restDaysMap.get(b.id)!.size;
+      return aRests - bRests;
+    });
+
+    for (const emp of employeesToConsider) {
+      if (restsAssignedToday >= canRestPerDay) break;
+      
+      const empRests = restDaysMap.get(emp.id)!;
+      
+      // Only assign if employee still needs rest days
+      if (empRests.size < restDaysNeeded) {
+        // Check we're not creating more than 6 consecutive work days
+        // by checking if NOT resting today would cause issues
+        empRests.add(day);
+        restsAssignedToday++;
+      }
+    }
+    
+    rotationIndex = (rotationIndex + 1) % positionEmployees.length;
+  }
+
+  return restDaysMap;
+}
+
+/**
  * Main schedule generation algorithm with position-based rotation
+ * Ensures employees work exactly the calendar's working days
  */
 export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedule {
   const { firmSettings, employees, month, year } = options;
@@ -37,6 +110,10 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
   
   const monthData = getMonthData(month);
   const daysInMonth = getDaysInMonth(month, year);
+  const calendarWorkingDays = monthData.workingDays;
+  
+  // Get holidays for this month
+  const holidayDays = new Set(monthData.holidays);
   
   // Initialize employee schedules
   const employeeSchedules: EmployeeSchedule[] = employees.map((emp) => ({
@@ -55,28 +132,35 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
     scheduleMap.set(employees[idx].id, es);
   });
 
-  // Track consecutive work days for each employee
-  const consecutiveWorkDays: Record<string, number> = {};
-  const weeklyHours: Record<string, number[]> = {};
-  
-  employees.forEach((emp) => {
-    consecutiveWorkDays[emp.id] = 0;
-    weeklyHours[emp.id] = [0, 0, 0, 0, 0, 0];
-  });
-
-  // Calculate target hours for each employee
-  const targetHoursPerEmployee: Record<string, number> = {};
-  employees.forEach((emp) => {
-    targetHoursPerEmployee[emp.id] = emp.contractHours * monthData.workingDays;
-  });
-
-  // Get employees by position for coverage rotation
+  // Get employees by position
   const employeesByPosition = getEmployeesByPosition(employees, positions);
   
-  // Track rotation index per position (for fair rest day distribution)
-  const rotationIndex: Record<string, number> = {};
-  positions.forEach((pos) => {
-    rotationIndex[pos.id] = 0;
+  // Pre-plan rest days for each position using rotation
+  const plannedRestDays = new Map<string, Set<number>>();
+  
+  for (const position of positions) {
+    const positionEmployees = employeesByPosition.get(position.id) || [];
+    const restPlan = planRestDaysForPosition(
+      positionEmployees,
+      position.minPerDay,
+      daysInMonth,
+      calendarWorkingDays,
+      holidayDays,
+      worksOnHolidays
+    );
+    
+    restPlan.forEach((restDays, empId) => {
+      plannedRestDays.set(empId, restDays);
+    });
+  }
+
+  // Track weekly hours for compliance checking
+  const weeklyHours: Record<string, number[]> = {};
+  const consecutiveWorkDays: Record<string, number> = {};
+  
+  employees.forEach((emp) => {
+    weeklyHours[emp.id] = [0, 0, 0, 0, 0, 0];
+    consecutiveWorkDays[emp.id] = 0;
   });
 
   // Process each day of the month
@@ -85,14 +169,13 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
     const isHolidayDay = isHoliday(currentDate);
     const weekIndex = Math.floor((day - 1) / 7);
 
-    // Process each position separately to ensure coverage
+    // Process each position
     for (const position of positions) {
       const positionEmployees = employeesByPosition.get(position.id) || [];
       if (positionEmployees.length === 0) continue;
 
-      // Check if this is a holiday and firm doesn't work on holidays
+      // Handle holidays when firm doesn't work
       if (isHolidayDay && !worksOnHolidays) {
-        // All employees in this position get holiday
         for (const emp of positionEmployees) {
           const empSchedule = scheduleMap.get(emp.id)!;
           empSchedule.entries[day] = { type: 'holiday' };
@@ -101,84 +184,69 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
         continue;
       }
 
-      const minRequired = position.minPerDay;
-      
-      // Analyze each employee's situation
-      const employeeStatus = positionEmployees.map((emp) => {
+      // Determine who works and who rests based on pre-planned rotation
+      // But also check legal constraints
+      const workingToday: Employee[] = [];
+      const restingToday: Employee[] = [];
+
+      for (const emp of positionEmployees) {
         const empSchedule = scheduleMap.get(emp.id)!;
+        const plannedRest = plannedRestDays.get(emp.id) || new Set();
+        
+        // Check legal constraints
         const weeklyLimit = emp.isMinor ? 35 : 56;
         const currentWeekHours = weeklyHours[emp.id][weekIndex] || 0;
-        const targetHours = targetHoursPerEmployee[emp.id];
         
-        // Legal reasons to force rest
-        const mustRest = 
+        const mustRestLegal = 
           consecutiveWorkDays[emp.id] >= 6 ||
           currentWeekHours >= weeklyLimit ||
           (isHolidayDay && emp.isMinor);
 
-        const reachedTarget = empSchedule.totalHours >= targetHours;
-        
-        return {
-          employee: emp,
-          mustRest,
-          reachedTarget,
-          totalHours: empSchedule.totalHours,
-          targetHours,
-          hoursRemaining: targetHours - empSchedule.totalHours,
-        };
-      });
-
-      // Split into groups
-      const mustRestGroup = employeeStatus.filter((e) => e.mustRest);
-      const canWorkGroup = employeeStatus.filter((e) => !e.mustRest);
-      
-      // Sort canWorkGroup: prioritize those with MORE hours remaining (fewer hours worked)
-      // This ensures fair distribution - those behind get priority
-      canWorkGroup.sort((a, b) => b.hoursRemaining - a.hoursRemaining);
-      
-      const workingEmployees: Employee[] = [];
-      const restingEmployees: Employee[] = mustRestGroup.map((e) => e.employee);
-      
-      // Step 1: Fill minimum coverage with employees who need the most hours
-      for (const emp of canWorkGroup) {
-        if (workingEmployees.length < minRequired) {
-          workingEmployees.push(emp.employee);
-        }
-      }
-      
-      // Step 2: If coverage not met from canWork, we have a staffing problem
-      // (This means too many people on forced rest)
-      
-      // Step 3: Remaining canWork employees - work only if they haven't reached target
-      const remainingCanWork = canWorkGroup.slice(workingEmployees.length);
-      for (const emp of remainingCanWork) {
-        if (!emp.reachedTarget) {
-          // Still needs hours - work today
-          workingEmployees.push(emp.employee);
+        if (mustRestLegal) {
+          restingToday.push(emp);
+        } else if (plannedRest.has(day)) {
+          restingToday.push(emp);
         } else {
-          // Reached target - rest today
-          restingEmployees.push(emp.employee);
+          workingToday.push(emp);
         }
       }
-      
-      const restingIds = new Set(restingEmployees.map((e) => e.id));
 
-      // Assign work or rest for each employee in this position
+      // Ensure minimum coverage is met
+      // If too many resting, pull some back to work (prioritize those without legal constraints)
+      const minRequired = position.minPerDay;
+      
+      while (workingToday.length < minRequired && restingToday.length > 0) {
+        // Find someone in restingToday who doesn't have legal constraints
+        const canWorkIndex = restingToday.findIndex((emp) => {
+          const weeklyLimit = emp.isMinor ? 35 : 56;
+          const currentWeekHours = weeklyHours[emp.id][weekIndex] || 0;
+          const mustRestLegal = 
+            consecutiveWorkDays[emp.id] >= 6 ||
+            currentWeekHours >= weeklyLimit ||
+            (isHolidayDay && emp.isMinor);
+          return !mustRestLegal;
+        });
+
+        if (canWorkIndex >= 0) {
+          const emp = restingToday.splice(canWorkIndex, 1)[0];
+          workingToday.push(emp);
+        } else {
+          // Everyone resting has legal constraints - can't meet coverage
+          break;
+        }
+      }
+
+      // Assign entries
       for (const emp of positionEmployees) {
         const empSchedule = scheduleMap.get(emp.id)!;
         
-        if (restingIds.has(emp.id)) {
-          // This employee rests today
+        if (restingToday.includes(emp)) {
           empSchedule.entries[day] = { type: 'rest' };
           empSchedule.totalRestDays++;
           consecutiveWorkDays[emp.id] = 0;
         } else {
-          // This employee works today
           const hours = emp.contractHours;
-          empSchedule.entries[day] = {
-            type: 'work',
-            hours,
-          };
+          empSchedule.entries[day] = { type: 'work', hours };
           empSchedule.totalHours += hours;
           empSchedule.totalWorkDays++;
           consecutiveWorkDays[emp.id]++;
@@ -189,17 +257,19 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
   }
 
   // Validate compliance for each employee
+  const targetHours = calendarWorkingDays * 8; // Standard target for 8h contracts
+  
   employeeSchedules.forEach((empSchedule) => {
     const employee = employees.find((e) => e.id === empSchedule.employeeId);
     if (!employee) return;
     
     const issues: string[] = [];
+    const empTargetHours = calendarWorkingDays * employee.contractHours;
 
     // Check target hours
-    const targetHours = targetHoursPerEmployee[employee.id];
-    const hoursDiff = Math.abs(empSchedule.totalHours - targetHours);
+    const hoursDiff = empSchedule.totalHours - empTargetHours;
     if (hoursDiff > 8) {
-      issues.push(`Часовете (${empSchedule.totalHours}ч) се различават от целевите (${targetHours}ч)`);
+      issues.push(`Часовете (${empSchedule.totalHours}ч) надвишават целевите (${empTargetHours}ч)`);
     }
 
     // Check weekly hour limits
