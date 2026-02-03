@@ -53,10 +53,19 @@ export interface EmployeeSchedule {
   complianceIssues: string[];
 }
 
+export interface CoverageGap {
+  day: number;
+  positionId: string;
+  positionName: string;
+  required: number;
+  actual: number;
+}
+
 export interface MonthSchedule {
   month: number;         // 1-12
   year: number;
   employeeSchedules: EmployeeSchedule[];
+  coverageGaps: CoverageGap[];  // Days where positions are understaffed
   generatedAt: Date;
 }
 

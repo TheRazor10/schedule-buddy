@@ -119,6 +119,49 @@ export default function ScheduleView() {
           <Badge className="bg-primary">4. График</Badge>
         </div>
 
+        {/* Coverage Gaps Warning */}
+        {schedule.coverageGaps && schedule.coverageGaps.length > 0 && (
+          <Card className="mb-6 border-amber-300 bg-amber-50">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-amber-700">
+                <AlertTriangle className="h-5 w-5" />
+                Предупреждение: Недостатъчен персонал
+              </CardTitle>
+              <CardDescription className="text-amber-600">
+                Следните дни имат недостатъчно покритие поради липса на персонал
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {/* Group by position */}
+                {firmSettings.positions.map((pos) => {
+                  const posGaps = schedule.coverageGaps?.filter((g) => g.positionId === pos.id) || [];
+                  if (posGaps.length === 0) return null;
+                  
+                  return (
+                    <div key={pos.id} className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary" className="bg-amber-200 text-amber-800">
+                        {pos.name}
+                      </Badge>
+                      <span className="text-sm text-amber-700">Без покритие на:</span>
+                      <div className="flex flex-wrap gap-1">
+                        {posGaps.map((gap) => (
+                          <Badge key={gap.day} variant="outline" className="border-amber-400 text-amber-700">
+                            {gap.day} {getMonthName(selectedMonth)}
+                          </Badge>
+                        ))}
+                      </div>
+                      <span className="text-xs text-amber-600">
+                        ({posGaps.length} дни)
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Legend */}
         <Card className="mb-6">
           <CardHeader className="pb-3">
