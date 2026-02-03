@@ -60,6 +60,7 @@ export default function ScheduleView() {
       schedule,
       employees,
       positions: firmSettings.positions,
+      shifts: firmSettings.shifts,
       firmName: firmSettings.firmName,
     });
   };
@@ -77,6 +78,11 @@ export default function ScheduleView() {
   const getPositionName = (positionId: string) => {
     const position = firmSettings.positions.find((p) => p.id === positionId);
     return position?.name || '—';
+  };
+
+  const getShift = (shiftId?: string) => {
+    if (!shiftId) return null;
+    return firmSettings.shifts.find((s) => s.id === shiftId);
   };
 
   return (
@@ -120,10 +126,14 @@ export default function ScheduleView() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-4">
-              <div className="flex items-center gap-2">
-                <div className="h-6 w-6 rounded bg-green-500" />
-                <span className="text-sm">Работа</span>
-              </div>
+              {firmSettings.shifts.map((shift) => (
+                <div key={shift.id} className="flex items-center gap-2">
+                  <div className="flex h-6 w-6 items-center justify-center rounded bg-green-500 text-xs font-bold text-white">
+                    {shift.abbreviation}
+                  </div>
+                  <span className="text-sm">{shift.name} ({shift.startTime}-{shift.endTime})</span>
+                </div>
+              ))}
               <div className="flex items-center gap-2">
                 <div className="h-6 w-6 rounded bg-red-400" />
                 <span className="text-sm">Почивка</span>
@@ -199,6 +209,7 @@ export default function ScheduleView() {
                         const entry = empSchedule.entries[day];
                         const dayOfWeek = getDayOfWeek(day);
                         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                        const shift = entry?.type === 'work' ? getShift(entry.shiftId) : null;
 
                         let bgColor = '';
                         let textColor = 'text-foreground';
@@ -218,7 +229,7 @@ export default function ScheduleView() {
                         } else if (entry.type === 'work') {
                           bgColor = 'bg-green-500';
                           textColor = 'text-white';
-                          content = 'Р';
+                          content = shift?.abbreviation || 'Р';
                         }
 
                         return (
@@ -242,7 +253,10 @@ export default function ScheduleView() {
                                 </div>
                               </TooltipTrigger>
                               <TooltipContent>
-                                {entry?.type === 'work' && (
+                                {entry?.type === 'work' && shift && (
+                                  <p>{shift.name} ({shift.startTime}-{shift.endTime}) - {entry.hours}ч</p>
+                                )}
+                                {entry?.type === 'work' && !shift && (
                                   <p>Работа ({entry.hours}ч)</p>
                                 )}
                                 {entry?.type === 'rest' && <p>Почивка</p>}
