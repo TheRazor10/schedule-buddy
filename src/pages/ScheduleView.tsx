@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +24,7 @@ import {
   Check,
   AlertTriangle,
   Calendar,
+  LogOut,
 } from 'lucide-react';
 import { getMonthName, getDaysInMonth } from '@/data/bulgarianCalendar2026';
 import { exportScheduleToExcel } from '@/utils/excelExport';
@@ -30,6 +32,7 @@ import { cn } from '@/lib/utils';
 
 export default function ScheduleView() {
   const navigate = useNavigate();
+  const { signOut } = useAuth();
   const { schedule, employees, firmSettings, selectedMonth, selectedYear } = useAppContext();
 
   if (!schedule) {
@@ -85,18 +88,29 @@ export default function ScheduleView() {
     return firmSettings.shifts.find((s) => s.id === shiftId);
   };
 
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/auth');
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto max-w-full px-4 py-8">
         {/* Header */}
-        <div className="mb-8 text-center">
-          <div className="mb-4 flex items-center justify-center gap-3">
-            <FileSpreadsheet className="h-10 w-10 text-primary" />
-            <h1 className="text-3xl font-bold text-foreground">
-              График за {getMonthName(selectedMonth)} {selectedYear}
-            </h1>
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <FileSpreadsheet className="h-10 w-10 text-primary" />
+              <h1 className="text-3xl font-bold text-foreground">
+                График за {getMonthName(selectedMonth)} {selectedYear}
+              </h1>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Изход
+            </Button>
           </div>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-center">
             {firmSettings.firmName} • Генериран на{' '}
             {schedule.generatedAt.toLocaleDateString('bg-BG')}
           </p>

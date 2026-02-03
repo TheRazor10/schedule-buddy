@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
+import { useAuth } from '@/hooks/useAuth';
+import { useEmployees } from '@/hooks/useFirms';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,14 +23,39 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Users, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, AlertTriangle, Check } from 'lucide-react';
+import { Users, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, AlertTriangle, Check, LogOut } from 'lucide-react';
 import { Employee } from '@/types/schedule';
 import { validateEGN, extractBirthDateFromEGN, isMinorFromEGN } from '@/utils/egnUtils';
 import { formatPresenceTime, getTotalPresenceHours } from '@/utils/workTimeUtils';
 
 export default function EmployeeManagement() {
   const navigate = useNavigate();
-  const { employees, addEmployee, updateEmployee, removeEmployee, firmSettings } = useAppContext();
+  const { user, signOut } = useAuth();
+  const { employees: contextEmployees, addEmployee, updateEmployee, removeEmployee, firmSettings } = useAppContext();
+
+  // Get selected firm from session storage
+  const selectedFirmId = sessionStorage.getItem('selectedFirmId');
+  const { 
+    employees: dbEmployees, 
+    createEmployee, 
+    updateEmployee: updateDbEmployee, 
+    deleteEmployee,
+    loading: dbLoading 
+  } = useEmployees(selectedFirmId);
+
+  // Use DB employees if firm is selected, otherwise use context
+  const employees: Employee[] = selectedFirmId 
+    ? dbEmployees.map(e => ({
+        id: e.id,
+        firstName: e.first_name,
+        lastName: e.last_name,
+        egn: e.egn,
+        positionId: e.position_id || '',
+        contractHours: e.contract_hours as 2 | 4 | 6 | 7 | 8,
+        isMinor: e.is_minor,
+        birthDate: e.birth_date ? new Date(e.birth_date) : new Date(),
+      }))
+    : contextEmployees;
 
   // Form state
   const [firstName, setFirstName] = useState('');
@@ -70,7 +97,7 @@ export default function EmployeeManagement() {
     setEditingId(null);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!firstName.trim() || !lastName.trim() || !egn || !positionId) return;
     
     const validation = validateEGN(egn);
@@ -82,21 +109,48 @@ export default function EmployeeManagement() {
     const birthDate = extractBirthDateFromEGN(egn);
     const isMinor = isMinorFromEGN(egn, new Date(2026, 0, 1)); // Check as of 2026
 
-    const employeeData: Employee = {
-      id: editingId || crypto.randomUUID(),
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      egn,
-      positionId,
-      contractHours: parseInt(contractHours) as 2 | 4 | 6 | 7 | 8,
-      isMinor,
-      birthDate: birthDate || new Date(),
-    };
-
-    if (editingId) {
-      updateEmployee(editingId, employeeData);
+    if (selectedFirmId) {
+      // Save to database
+      if (editingId) {
+        await updateDbEmployee(editingId, {
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          egn,
+          position_id: positionId,
+          contract_hours: parseInt(contractHours),
+          is_minor: isMinor,
+          birth_date: birthDate?.toISOString().split('T')[0] || null,
+        });
+      } else {
+        await createEmployee({
+          firm_id: selectedFirmId,
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          egn,
+          position_id: positionId,
+          contract_hours: parseInt(contractHours),
+          is_minor: isMinor,
+          birth_date: birthDate?.toISOString().split('T')[0] || null,
+        });
+      }
     } else {
-      addEmployee(employeeData);
+      // Use context
+      const employeeData: Employee = {
+        id: editingId || crypto.randomUUID(),
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        egn,
+        positionId,
+        contractHours: parseInt(contractHours) as 2 | 4 | 6 | 7 | 8,
+        isMinor,
+        birthDate: birthDate || new Date(),
+      };
+
+      if (editingId) {
+        updateEmployee(editingId, employeeData);
+      } else {
+        addEmployee(employeeData);
+      }
     }
 
     resetForm();
@@ -111,9 +165,22 @@ export default function EmployeeManagement() {
     setEditingId(employee.id);
   };
 
+  const handleDelete = async (id: string) => {
+    if (selectedFirmId) {
+      await deleteEmployee(id);
+    } else {
+      removeEmployee(id);
+    }
+  };
+
   const getPositionName = (posId: string) => {
     const position = firmSettings.positions.find((p) => p.id === posId);
     return position?.name || '—';
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/auth');
   };
 
   const isFormValid =
@@ -129,14 +196,25 @@ export default function EmployeeManagement() {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto max-w-5xl px-4 py-8">
         {/* Header */}
-        <div className="mb-8 text-center">
-          <div className="mb-4 flex items-center justify-center gap-3">
-            <Users className="h-10 w-10 text-primary" />
-            <h1 className="text-3xl font-bold text-foreground">Служители</h1>
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Users className="h-10 w-10 text-primary" />
+              <h1 className="text-3xl font-bold text-foreground">Служители</h1>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Изход
+            </Button>
           </div>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-center">
             Добавете служителите, които ще бъдат включени в графика
           </p>
+          {firmSettings.firmName && (
+            <p className="text-sm text-muted-foreground text-center mt-1">
+              Фирма: <strong>{firmSettings.firmName}</strong>
+            </p>
+          )}
         </div>
 
         {/* Progress indicator */}
@@ -362,7 +440,7 @@ export default function EmployeeManagement() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => removeEmployee(employee.id)}
+                                onClick={() => handleDelete(employee.id)}
                                 className="h-8 w-8 text-destructive hover:bg-destructive/10"
                               >
                                 <Trash2 className="h-4 w-4" />
