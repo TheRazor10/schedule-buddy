@@ -1,4 +1,5 @@
 import {
+  CoverageGap,
   Employee,
   EmployeeSchedule,
   FirmSettings,
@@ -30,12 +31,12 @@ function getEmployeesByPosition(
 }
 
 /**
- * Pre-plan rest days for a position using fair rotation
- * Distributes rest days evenly across the month while ensuring minPerDay coverage
+ * Pre-plan rest days for a position to reach target working days
+ * Distributes rest days evenly across the month (not consecutive)
+ * Ignores coverage constraints - employees get rest regardless of understaffing
  */
 function planRestDaysForPosition(
   positionEmployees: Employee[],
-  minPerDay: number,
   daysInMonth: number,
   targetWorkDays: number,
   holidayDays: Set<number>,
@@ -46,56 +47,86 @@ function planRestDaysForPosition(
 
   if (positionEmployees.length === 0) return restDaysMap;
 
-  // How many can rest each day while maintaining coverage
-  const canRestPerDay = Math.max(0, positionEmployees.length - minPerDay);
-  
-  if (canRestPerDay === 0) {
-    // Everyone must work every day - no rest possible from rotation
-    return restDaysMap;
-  }
-
   // Calculate how many rest days each employee needs
   // restDaysNeeded = totalDays - targetWorkDays - holidays (if firm closed)
   const holidayCount = worksOnHolidays ? 0 : holidayDays.size;
   const availableWorkDays = daysInMonth - holidayCount;
   const restDaysNeeded = Math.max(0, availableWorkDays - targetWorkDays);
 
-  // Create rotation index for fair distribution
-  let rotationIndex = 0;
-  
-  // Process each day and assign rest using rotation
-  for (let day = 1; day <= daysInMonth; day++) {
-    // Skip holidays if firm doesn't work on them (these are automatic rest)
-    if (!worksOnHolidays && holidayDays.has(day)) {
-      continue;
-    }
-
-    // Assign rest to employees in rotation, up to canRestPerDay
-    let restsAssignedToday = 0;
-    const employeesToConsider = [...positionEmployees];
+  // For each employee, distribute rest days evenly across the month
+  for (const emp of positionEmployees) {
+    const empRests = restDaysMap.get(emp.id)!;
     
-    // Sort by who has fewer rest days assigned (to keep it balanced)
-    employeesToConsider.sort((a, b) => {
-      const aRests = restDaysMap.get(a.id)!.size;
-      const bRests = restDaysMap.get(b.id)!.size;
-      return aRests - bRests;
-    });
-
-    for (const emp of employeesToConsider) {
-      if (restsAssignedToday >= canRestPerDay) break;
+    if (restDaysNeeded <= 0) continue;
+    
+    // Get workable days (exclude holidays if firm doesn't work)
+    const workableDays: number[] = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      if (!worksOnHolidays && holidayDays.has(day)) continue;
+      workableDays.push(day);
+    }
+    
+    // Calculate ideal spacing between rest days
+    // E.g., if 11 rest days in 31 workable days, space = ~2.8 days between rests
+    const spacing = workableDays.length / (restDaysNeeded + 1);
+    
+    // Assign rest days at regular intervals
+    for (let i = 1; i <= restDaysNeeded; i++) {
+      const idealIndex = Math.floor(i * spacing) - 1;
+      const dayIndex = Math.min(idealIndex, workableDays.length - 1);
       
-      const empRests = restDaysMap.get(emp.id)!;
+      // Find nearest day that isn't already a rest day
+      let selectedDay = workableDays[dayIndex];
       
-      // Only assign if employee still needs rest days
-      if (empRests.size < restDaysNeeded) {
-        // Check we're not creating more than 6 consecutive work days
-        // by checking if NOT resting today would cause issues
-        empRests.add(day);
-        restsAssignedToday++;
+      // Avoid consecutive rest days by checking neighbors
+      let offset = 0;
+      while (empRests.has(selectedDay) || 
+             empRests.has(selectedDay - 1) || 
+             empRests.has(selectedDay + 1)) {
+        offset++;
+        const tryIndex = dayIndex + offset;
+        const tryIndexBack = dayIndex - offset;
+        
+        if (tryIndex < workableDays.length && !empRests.has(workableDays[tryIndex])) {
+          selectedDay = workableDays[tryIndex];
+          break;
+        } else if (tryIndexBack >= 0 && !empRests.has(workableDays[tryIndexBack])) {
+          selectedDay = workableDays[tryIndexBack];
+          break;
+        }
+        
+        if (offset > workableDays.length) break; // Safety
       }
+      
+      empRests.add(selectedDay);
     }
+  }
+
+  // Stagger rest days between employees to spread gaps across different days
+  // This helps avoid all employees in a position resting on the same day
+  const employeeList = [...positionEmployees];
+  for (let i = 1; i < employeeList.length; i++) {
+    const empRests = restDaysMap.get(employeeList[i].id)!;
+    const restArray = [...empRests].sort((a, b) => a - b);
     
-    rotationIndex = (rotationIndex + 1) % positionEmployees.length;
+    // Shift rest days by an offset based on employee index
+    const shiftAmount = Math.floor(i * (30 / positionEmployees.length / restDaysNeeded));
+    
+    if (shiftAmount > 0 && restArray.length > 0) {
+      const newRests = new Set<number>();
+      for (const day of restArray) {
+        let newDay = day + shiftAmount;
+        // Wrap around if exceeds month
+        while (newDay > daysInMonth) newDay -= daysInMonth;
+        while (newDay < 1) newDay += daysInMonth;
+        // Skip holidays
+        if (!worksOnHolidays && holidayDays.has(newDay)) {
+          newDay = (newDay % daysInMonth) + 1;
+        }
+        newRests.add(newDay);
+      }
+      restDaysMap.set(employeeList[i].id, newRests);
+    }
   }
 
   return restDaysMap;
@@ -176,7 +207,6 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
     const positionEmployees = employeesByPosition.get(position.id) || [];
     const restPlan = planRestDaysForPosition(
       positionEmployees,
-      position.minPerDay,
       daysInMonth,
       calendarWorkingDays,
       holidayDays,
@@ -187,6 +217,9 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
       plannedRestDays.set(empId, restDays);
     });
   }
+
+  // Track coverage gaps
+  const coverageGaps: CoverageGap[] = [];
 
   // Track weekly hours for compliance checking
   const weeklyHours: Record<string, number[]> = {};
@@ -249,29 +282,18 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
         }
       }
 
-      // Ensure minimum coverage is met
-      // If too many resting, pull some back to work (prioritize those without legal constraints)
+      // Don't force employees back to work - accept understaffing
+      // Just track coverage gaps
       const minRequired = position.minPerDay;
       
-      while (workingToday.length < minRequired && restingToday.length > 0) {
-        // Find someone in restingToday who doesn't have legal constraints
-        const canWorkIndex = restingToday.findIndex((emp) => {
-          const weeklyLimit = emp.isMinor ? 35 : 56;
-          const currentWeekHours = weeklyHours[emp.id][weekIndex] || 0;
-          const mustRestLegal = 
-            consecutiveWorkDays[emp.id] >= 6 ||
-            currentWeekHours >= weeklyLimit ||
-            (isHolidayDay && emp.isMinor);
-          return !mustRestLegal;
+      if (workingToday.length < minRequired) {
+        coverageGaps.push({
+          day,
+          positionId: position.id,
+          positionName: position.name,
+          required: minRequired,
+          actual: workingToday.length,
         });
-
-        if (canWorkIndex >= 0) {
-          const emp = restingToday.splice(canWorkIndex, 1)[0];
-          workingToday.push(emp);
-        } else {
-          // Everyone resting has legal constraints - can't meet coverage
-          break;
-        }
       }
 
       // Assign shifts to working employees
@@ -336,6 +358,7 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
     month,
     year,
     employeeSchedules,
+    coverageGaps,
     generatedAt: new Date(),
   };
 }
