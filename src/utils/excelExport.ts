@@ -1,16 +1,17 @@
 import * as XLSX from 'xlsx';
-import { MonthSchedule, Employee, Position } from '@/types/schedule';
+import { MonthSchedule, Employee, Position, Shift } from '@/types/schedule';
 import { getMonthNameEn, getDaysInMonth } from '@/data/bulgarianCalendar2026';
 
 interface ExportOptions {
   schedule: MonthSchedule;
   employees: Employee[];
   positions: Position[];
+  shifts: Shift[];
   firmName: string;
 }
 
 export function exportScheduleToExcel(options: ExportOptions): void {
-  const { schedule, employees, positions, firmName } = options;
+  const { schedule, employees, positions, shifts, firmName } = options;
   const { month, year, employeeSchedules } = schedule;
 
   const daysInMonth = getDaysInMonth(month, year);
@@ -20,6 +21,13 @@ export function exportScheduleToExcel(options: ExportOptions): void {
   const getPositionName = (positionId: string) => {
     const position = positions.find((p) => p.id === positionId);
     return position?.name || '—';
+  };
+
+  // Helper to get shift abbreviation
+  const getShiftAbbr = (shiftId?: string) => {
+    if (!shiftId) return 'Р';
+    const shift = shifts.find((s) => s.id === shiftId);
+    return shift?.abbreviation || 'Р';
   };
 
   // Create workbook
@@ -59,7 +67,7 @@ export function exportScheduleToExcel(options: ExportOptions): void {
       } else if (entry.type === 'rest') {
         row.push('П'); // Почивка
       } else if (entry.type === 'work') {
-        row.push('Р'); // Работа
+        row.push(getShiftAbbr(entry.shiftId)); // Shift abbreviation
       }
     }
 
@@ -90,12 +98,14 @@ export function exportScheduleToExcel(options: ExportOptions): void {
   // Add worksheet to workbook
   XLSX.utils.book_append_sheet(wb, ws, `${monthName} ${year}`);
 
-  // Add legend sheet
+  // Add legend sheet with shifts
   const legendData = [
     ['Легенда', ''],
     ['ПР', 'Празник'],
     ['П', 'Почивка'],
-    ['Р', 'Работа'],
+    ['', ''],
+    ['Смени:', ''],
+    ...shifts.map((s) => [s.abbreviation, `${s.name} (${s.startTime}-${s.endTime})`]),
     ['', ''],
     ['✓', 'Съответства на изискванията'],
     ['⚠', 'Има предупреждения'],

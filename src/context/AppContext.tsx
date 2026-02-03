@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { FirmSettings, Employee, MonthSchedule, Position } from '@/types/schedule';
+import { FirmSettings, Employee, MonthSchedule, Position, Shift } from '@/types/schedule';
 
 interface AppState {
   firmSettings: FirmSettings;
@@ -14,6 +14,9 @@ interface AppContextType extends AppState {
   addPosition: (position: Position) => void;
   updatePosition: (id: string, position: Partial<Position>) => void;
   removePosition: (id: string) => void;
+  addShift: (shift: Shift) => void;
+  updateShift: (id: string, shift: Partial<Shift>) => void;
+  removeShift: (id: string) => void;
   addEmployee: (employee: Employee) => void;
   updateEmployee: (id: string, employee: Partial<Employee>) => void;
   removeEmployee: (id: string) => void;
@@ -30,6 +33,7 @@ const defaultFirmSettings: FirmSettings = {
   operatingHoursEnd: '20:00',
   worksOnHolidays: false,
   positions: [],
+  shifts: [],
 };
 
 const defaultState: AppState = {
@@ -85,6 +89,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
   };
 
+  const addShift = (shift: Shift) => {
+    setState((prev) => ({
+      ...prev,
+      firmSettings: {
+        ...prev.firmSettings,
+        shifts: [...prev.firmSettings.shifts, shift],
+      },
+    }));
+  };
+
+  const updateShift = (id: string, shiftUpdate: Partial<Shift>) => {
+    setState((prev) => ({
+      ...prev,
+      firmSettings: {
+        ...prev.firmSettings,
+        shifts: prev.firmSettings.shifts.map((s) =>
+          s.id === id ? { ...s, ...shiftUpdate } : s
+        ),
+      },
+    }));
+  };
+
+  const removeShift = (id: string) => {
+    setState((prev) => ({
+      ...prev,
+      firmSettings: {
+        ...prev.firmSettings,
+        shifts: prev.firmSettings.shifts.filter((s) => s.id !== id),
+      },
+    }));
+  };
+
   const addEmployee = (employee: Employee) => {
     setState((prev) => ({
       ...prev,
@@ -132,6 +168,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addPosition,
         updatePosition,
         removePosition,
+        addShift,
+        updateShift,
+        removeShift,
         addEmployee,
         updateEmployee,
         removeEmployee,

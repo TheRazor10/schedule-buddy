@@ -8,11 +8,11 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Trash2, Building2, Clock, ArrowRight, Users } from 'lucide-react';
-import { Position } from '@/types/schedule';
+import { Position, Shift } from '@/types/schedule';
 
 export default function FirmSetup() {
   const navigate = useNavigate();
-  const { firmSettings, setFirmSettings, addPosition, removePosition } = useAppContext();
+  const { firmSettings, setFirmSettings, addPosition, removePosition, addShift, removeShift } = useAppContext();
   
   const [firmName, setFirmName] = useState(firmSettings.firmName);
   const [ownerName, setOwnerName] = useState(firmSettings.ownerName);
@@ -23,6 +23,12 @@ export default function FirmSetup() {
   // New position form
   const [newPositionName, setNewPositionName] = useState('');
   const [newMinPerDay, setNewMinPerDay] = useState('1');
+
+  // New shift form
+  const [newShiftName, setNewShiftName] = useState('');
+  const [newShiftAbbr, setNewShiftAbbr] = useState('');
+  const [newShiftStart, setNewShiftStart] = useState('09:00');
+  const [newShiftEnd, setNewShiftEnd] = useState('18:00');
 
   const handleAddPosition = () => {
     if (!newPositionName.trim()) return;
@@ -38,6 +44,24 @@ export default function FirmSetup() {
     setNewMinPerDay('1');
   };
 
+  const handleAddShift = () => {
+    if (!newShiftName.trim() || !newShiftAbbr.trim()) return;
+    
+    const newShift: Shift = {
+      id: crypto.randomUUID(),
+      name: newShiftName.trim(),
+      abbreviation: newShiftAbbr.trim().toUpperCase(),
+      startTime: newShiftStart,
+      endTime: newShiftEnd,
+    };
+    
+    addShift(newShift);
+    setNewShiftName('');
+    setNewShiftAbbr('');
+    setNewShiftStart('09:00');
+    setNewShiftEnd('18:00');
+  };
+
   const handleContinue = () => {
     setFirmSettings({
       firmName,
@@ -46,11 +70,12 @@ export default function FirmSetup() {
       operatingHoursEnd: operatingEnd,
       worksOnHolidays,
       positions: firmSettings.positions,
+      shifts: firmSettings.shifts,
     });
     navigate('/employees');
   };
 
-  const isValid = firmName.trim() && firmSettings.positions.length > 0;
+  const isValid = firmName.trim() && firmSettings.positions.length > 0 && firmSettings.shifts.length > 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -151,6 +176,117 @@ export default function FirmSetup() {
                   checked={worksOnHolidays}
                   onCheckedChange={setWorksOnHolidays}
                 />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Shifts Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Смени *
+              </CardTitle>
+              <CardDescription>
+                Определете работните смени. Служителите ще бъдат разпределени между тях.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Existing shifts */}
+              {firmSettings.shifts.length > 0 && (
+                <div className="space-y-2">
+                  {firmSettings.shifts.map((shift) => (
+                    <div
+                      key={shift.id}
+                      className="flex items-center justify-between rounded-lg border bg-muted/30 p-3"
+                    >
+                      <div className="flex items-center gap-4">
+                        <Badge variant="secondary" className="font-bold text-base">
+                          {shift.abbreviation}
+                        </Badge>
+                        <div>
+                          <span className="font-medium">{shift.name}</span>
+                          <span className="ml-2 text-sm text-muted-foreground">
+                            ({shift.startTime} - {shift.endTime})
+                          </span>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeShift(shift.id)}
+                        className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add new shift form */}
+              <div className="rounded-lg border border-dashed p-4">
+                <p className="mb-3 text-sm font-medium">Добави нова смяна</p>
+                <div className="grid gap-3 sm:grid-cols-4">
+                  <div className="space-y-1 sm:col-span-2">
+                    <Label htmlFor="shiftName" className="text-xs">
+                      Име на смяната
+                    </Label>
+                    <Input
+                      id="shiftName"
+                      value={newShiftName}
+                      onChange={(e) => setNewShiftName(e.target.value)}
+                      placeholder="Сутрешна"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="shiftAbbr" className="text-xs">
+                      Съкращение
+                    </Label>
+                    <Input
+                      id="shiftAbbr"
+                      value={newShiftAbbr}
+                      onChange={(e) => setNewShiftAbbr(e.target.value.slice(0, 2))}
+                      placeholder="С"
+                      maxLength={2}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="shiftStart" className="text-xs">
+                      Начало
+                    </Label>
+                    <Input
+                      id="shiftStart"
+                      type="time"
+                      value={newShiftStart}
+                      onChange={(e) => setNewShiftStart(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="shiftEnd" className="text-xs">
+                      Край
+                    </Label>
+                    <Input
+                      id="shiftEnd"
+                      type="time"
+                      value={newShiftEnd}
+                      onChange={(e) => setNewShiftEnd(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <Button
+                  onClick={handleAddShift}
+                  disabled={!newShiftName.trim() || !newShiftAbbr.trim()}
+                  className="mt-3 w-full"
+                >
+                  <Plus className="mr-1 h-4 w-4" />
+                  Добави смяна
+                </Button>
+              </div>
+
+              {/* Example hint */}
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                <strong>Пример:</strong> Сутрешна смяна (С) 09:00-18:00, Вечерна смяна (В) 13:00-22:00
               </div>
             </CardContent>
           </Card>

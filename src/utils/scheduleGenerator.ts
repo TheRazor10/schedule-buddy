@@ -4,6 +4,7 @@ import {
   FirmSettings,
   MonthSchedule,
   Position,
+  Shift,
 } from '@/types/schedule';
 import { getMonthData, getDaysInMonth, isHoliday } from '@/data/bulgarianCalendar2026';
 
@@ -101,12 +102,45 @@ function planRestDaysForPosition(
 }
 
 /**
+ * Assign shifts to working employees for a day
+ * Distributes employees across shifts as evenly as possible
+ * Uses rotation to ensure fairness over time
+ */
+function assignShiftsToEmployees(
+  workingEmployees: Employee[],
+  shifts: Shift[],
+  day: number,
+  shiftRotationCounter: Map<string, number>
+): Map<string, string> {
+  const shiftAssignments = new Map<string, string>();
+  
+  if (shifts.length === 0 || workingEmployees.length === 0) {
+    return shiftAssignments;
+  }
+
+  // For each employee, assign a shift based on rotation
+  for (const emp of workingEmployees) {
+    const counter = shiftRotationCounter.get(emp.id) || 0;
+    const shiftIndex = counter % shifts.length;
+    const assignedShift = shifts[shiftIndex];
+    
+    shiftAssignments.set(emp.id, assignedShift.id);
+    
+    // Increment rotation counter for next assignment
+    shiftRotationCounter.set(emp.id, counter + 1);
+  }
+
+  return shiftAssignments;
+}
+
+/**
  * Main schedule generation algorithm with position-based rotation
  * Ensures employees work exactly the calendar's working days
+ * Assigns specific shifts to each work day
  */
 export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedule {
   const { firmSettings, employees, month, year } = options;
-  const { positions, worksOnHolidays } = firmSettings;
+  const { positions, shifts, worksOnHolidays } = firmSettings;
   
   const monthData = getMonthData(month);
   const daysInMonth = getDaysInMonth(month, year);
@@ -158,9 +192,13 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
   const weeklyHours: Record<string, number[]> = {};
   const consecutiveWorkDays: Record<string, number> = {};
   
+  // Track shift rotation for fair distribution
+  const shiftRotationCounter = new Map<string, number>();
+  
   employees.forEach((emp) => {
     weeklyHours[emp.id] = [0, 0, 0, 0, 0, 0];
     consecutiveWorkDays[emp.id] = 0;
+    shiftRotationCounter.set(emp.id, 0);
   });
 
   // Process each day of the month
@@ -236,6 +274,14 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
         }
       }
 
+      // Assign shifts to working employees
+      const shiftAssignments = assignShiftsToEmployees(
+        workingToday,
+        shifts,
+        day,
+        shiftRotationCounter
+      );
+
       // Assign entries
       for (const emp of positionEmployees) {
         const empSchedule = scheduleMap.get(emp.id)!;
@@ -246,7 +292,8 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
           consecutiveWorkDays[emp.id] = 0;
         } else {
           const hours = emp.contractHours;
-          empSchedule.entries[day] = { type: 'work', hours };
+          const shiftId = shiftAssignments.get(emp.id);
+          empSchedule.entries[day] = { type: 'work', hours, shiftId };
           empSchedule.totalHours += hours;
           empSchedule.totalWorkDays++;
           consecutiveWorkDays[emp.id]++;

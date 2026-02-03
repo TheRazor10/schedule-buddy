@@ -1,5 +1,13 @@
 // Bulgarian Work Schedule Types
 
+export interface Shift {
+  id: string;
+  name: string;
+  abbreviation: string; // Short code for display (e.g., "С", "В")
+  startTime: string;    // HH:mm
+  endTime: string;      // HH:mm
+}
+
 export interface Position {
   id: string;
   name: string;
@@ -13,6 +21,7 @@ export interface FirmSettings {
   operatingHoursEnd: string;   // HH:mm
   worksOnHolidays: boolean;
   positions: Position[];
+  shifts: Shift[];
 }
 
 export interface Employee {
@@ -31,6 +40,7 @@ export type ScheduleEntryType = 'work' | 'rest' | 'holiday';
 export interface ScheduleEntry {
   type: ScheduleEntryType;
   hours?: number;        // Hours worked (from contract)
+  shiftId?: string;      // Which shift assigned (only for 'work' type)
 }
 
 export interface EmployeeSchedule {
