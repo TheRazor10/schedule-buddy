@@ -20,7 +20,6 @@ export interface FirmSettings {
   operatingHoursStart: string; // HH:mm
   operatingHoursEnd: string;   // HH:mm
   worksOnHolidays: boolean;
-  breakDurationMinutes: number; // Break duration in minutes (e.g., 30 or 60)
   positions: Position[];
   shifts: Shift[];
 }
