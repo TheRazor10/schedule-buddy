@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { FirmSettings, Employee, MonthSchedule, Position, Shift } from '@/types/schedule';
 
 interface AppState {
@@ -44,10 +44,40 @@ const defaultState: AppState = {
   selectedYear: 2026,
 };
 
+const STORAGE_KEY = 'schedule-generator-data';
+
+const loadFromStorage = (): AppState => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return { ...defaultState, ...parsed };
+    }
+  } catch (e) {
+    console.error('Failed to load from localStorage:', e);
+  }
+  return defaultState;
+};
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AppState>(defaultState);
+  const [state, setState] = useState<AppState>(loadFromStorage);
+
+  // Persist to localStorage whenever state changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        firmSettings: state.firmSettings,
+        employees: state.employees,
+        selectedMonth: state.selectedMonth,
+        selectedYear: state.selectedYear,
+        // Don't persist schedule - regenerate as needed
+      }));
+    } catch (e) {
+      console.error('Failed to save to localStorage:', e);
+    }
+  }, [state.firmSettings, state.employees, state.selectedMonth, state.selectedYear]);
 
   const setFirmSettings = (settings: FirmSettings) => {
     setState((prev) => ({ ...prev, firmSettings: settings }));
