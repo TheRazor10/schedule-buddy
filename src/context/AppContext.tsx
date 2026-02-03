@@ -32,6 +32,7 @@ const defaultFirmSettings: FirmSettings = {
   operatingHoursStart: '08:00',
   operatingHoursEnd: '20:00',
   worksOnHolidays: false,
+  breakDurationMinutes: 60,
   positions: [],
   shifts: [],
 };

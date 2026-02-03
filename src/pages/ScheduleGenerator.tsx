@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,12 +12,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Calendar, ArrowLeft, Play, Loader2, CalendarDays, Clock, AlertTriangle } from 'lucide-react';
+import { Calendar, ArrowLeft, Play, Loader2, CalendarDays, Clock, AlertTriangle, LogOut } from 'lucide-react';
 import { getMonthData, getMonthName, MONTHLY_DATA_2026 } from '@/data/bulgarianCalendar2026';
 import { generateSchedule } from '@/utils/scheduleGenerator';
 
 export default function ScheduleGenerator() {
   const navigate = useNavigate();
+  const { signOut } = useAuth();
   const {
     firmSettings,
     employees,
@@ -59,18 +61,34 @@ export default function ScheduleGenerator() {
     employees: employees.filter((e) => e.positionId === pos.id),
   }));
 
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/auth');
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto max-w-4xl px-4 py-8">
         {/* Header */}
-        <div className="mb-8 text-center">
-          <div className="mb-4 flex items-center justify-center gap-3">
-            <Calendar className="h-10 w-10 text-primary" />
-            <h1 className="text-3xl font-bold text-foreground">Генериране на график</h1>
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Calendar className="h-10 w-10 text-primary" />
+              <h1 className="text-3xl font-bold text-foreground">Генериране на график</h1>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Изход
+            </Button>
           </div>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-center">
             Изберете месец и генерирайте работен график
           </p>
+          {firmSettings.firmName && (
+            <p className="text-sm text-muted-foreground text-center mt-1">
+              Фирма: <strong>{firmSettings.firmName}</strong>
+            </p>
+          )}
         </div>
 
         {/* Progress indicator */}

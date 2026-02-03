@@ -14,7 +14,193 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      employees: {
+        Row: {
+          birth_date: string | null
+          contract_hours: number
+          created_at: string
+          egn: string
+          firm_id: string
+          first_name: string
+          id: string
+          is_minor: boolean
+          last_name: string
+          position_id: string | null
+        }
+        Insert: {
+          birth_date?: string | null
+          contract_hours?: number
+          created_at?: string
+          egn: string
+          firm_id: string
+          first_name: string
+          id?: string
+          is_minor?: boolean
+          last_name: string
+          position_id?: string | null
+        }
+        Update: {
+          birth_date?: string | null
+          contract_hours?: number
+          created_at?: string
+          egn?: string
+          firm_id?: string
+          first_name?: string
+          id?: string
+          is_minor?: boolean
+          last_name?: string
+          position_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employees_firm_id_fkey"
+            columns: ["firm_id"]
+            isOneToOne: false
+            referencedRelation: "firms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employees_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
+            referencedRelation: "positions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      firms: {
+        Row: {
+          break_duration_minutes: number
+          created_at: string
+          id: string
+          name: string
+          operating_hours_end: string
+          operating_hours_start: string
+          owner_name: string
+          updated_at: string
+          user_id: string
+          works_on_holidays: boolean
+        }
+        Insert: {
+          break_duration_minutes?: number
+          created_at?: string
+          id?: string
+          name: string
+          operating_hours_end?: string
+          operating_hours_start?: string
+          owner_name: string
+          updated_at?: string
+          user_id: string
+          works_on_holidays?: boolean
+        }
+        Update: {
+          break_duration_minutes?: number
+          created_at?: string
+          id?: string
+          name?: string
+          operating_hours_end?: string
+          operating_hours_start?: string
+          owner_name?: string
+          updated_at?: string
+          user_id?: string
+          works_on_holidays?: boolean
+        }
+        Relationships: []
+      }
+      positions: {
+        Row: {
+          created_at: string
+          firm_id: string
+          id: string
+          min_per_day: number
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          firm_id: string
+          id?: string
+          min_per_day?: number
+          name: string
+        }
+        Update: {
+          created_at?: string
+          firm_id?: string
+          id?: string
+          min_per_day?: number
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "positions_firm_id_fkey"
+            columns: ["firm_id"]
+            isOneToOne: false
+            referencedRelation: "firms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      shifts: {
+        Row: {
+          abbreviation: string
+          created_at: string
+          end_time: string
+          firm_id: string
+          id: string
+          name: string
+          start_time: string
+        }
+        Insert: {
+          abbreviation: string
+          created_at?: string
+          end_time: string
+          firm_id: string
+          id?: string
+          name: string
+          start_time: string
+        }
+        Update: {
+          abbreviation?: string
+          created_at?: string
+          end_time?: string
+          firm_id?: string
+          id?: string
+          name?: string
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shifts_firm_id_fkey"
+            columns: ["firm_id"]
+            isOneToOne: false
+            referencedRelation: "firms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
