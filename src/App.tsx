@@ -11,6 +11,7 @@ import FirmSetup from "./pages/FirmSetup";
 import EmployeeManagement from "./pages/EmployeeManagement";
 import ScheduleGenerator from "./pages/ScheduleGenerator";
 import ScheduleView from "./pages/ScheduleView";
+import AdminPanel from "./pages/AdminPanel";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -54,6 +55,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <ScheduleView />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedRoute requireAdmin>
+                    <AdminPanel />
                   </ProtectedRoute>
                 }
               />

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
 import { useAuth } from '@/hooks/useAuth';
+import { useRoles } from '@/hooks/useRoles';
 import { useFirms, usePositions, useShifts, DBFirm } from '@/hooks/useFirms';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,12 +11,13 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Building2, Clock, ArrowRight, Users, LogOut, History, Coffee } from 'lucide-react';
+import { Plus, Trash2, Building2, Clock, ArrowRight, Users, LogOut, History, Coffee, Shield } from 'lucide-react';
 import { Position, Shift } from '@/types/schedule';
 
 export default function FirmSetup() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { isAdmin } = useRoles();
   const { firmSettings, setFirmSettings, addPosition, removePosition, addShift, removeShift } = useAppContext();
   const { firms, loading: firmsLoading, createFirm, updateFirm } = useFirms();
   
@@ -269,10 +271,18 @@ export default function FirmSetup() {
               <Building2 className="h-10 w-10 text-primary" />
               <h1 className="text-3xl font-bold text-foreground">График на Смените</h1>
             </div>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              <LogOut className="h-4 w-4 mr-2" />
-              Изход
-            </Button>
+            <div className="flex items-center gap-2">
+              {isAdmin && (
+                <Button variant="outline" size="sm" onClick={() => navigate('/admin')}>
+                  <Shield className="h-4 w-4 mr-2" />
+                  Админ панел
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={handleLogout}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Изход
+              </Button>
+            </div>
           </div>
           <p className="text-muted-foreground text-center">
             Генератор на работни графици съобразен с българското трудово законодателство
