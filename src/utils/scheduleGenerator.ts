@@ -133,15 +133,16 @@ function planRestDaysForPosition(
 }
 
 /**
- * Assign shifts to working employees for a day
- * Distributes employees across shifts as evenly as possible
- * Uses rotation to ensure fairness over time
+ * Assign shifts to working employees for a day - POSITION-BALANCED
+ * Distributes employees evenly across shifts for each position on each day
+ * Ensures coverage on all shifts, not clustering everyone on one shift
  */
 function assignShiftsToEmployees(
   workingEmployees: Employee[],
   shifts: Shift[],
   day: number,
-  shiftRotationCounter: Map<string, number>
+  positionId: string,
+  dailyShiftBalance: Map<string, number> // tracks which shift gets "extra" employee for odd counts
 ): Map<string, string> {
   const shiftAssignments = new Map<string, string>();
   
@@ -149,17 +150,61 @@ function assignShiftsToEmployees(
     return shiftAssignments;
   }
 
-  // For each employee, assign a shift based on rotation
-  for (const emp of workingEmployees) {
-    const counter = shiftRotationCounter.get(emp.id) || 0;
-    const shiftIndex = counter % shifts.length;
-    const assignedShift = shifts[shiftIndex];
-    
-    shiftAssignments.set(emp.id, assignedShift.id);
-    
-    // Increment rotation counter for next assignment
-    shiftRotationCounter.set(emp.id, counter + 1);
+  const numShifts = shifts.length;
+  const numEmployees = workingEmployees.length;
+  
+  // Calculate how many employees per shift
+  const basePerShift = Math.floor(numEmployees / numShifts);
+  const remainder = numEmployees % numShifts;
+  
+  // Track which shift gets the extra employee(s) - alternates by day
+  const balanceKey = `${positionId}`;
+  const dayOffset = dailyShiftBalance.get(balanceKey) || 0;
+  
+  // Build shift slots: distribute evenly, with remainder rotating
+  const shiftSlots: string[] = [];
+  for (let i = 0; i < numShifts; i++) {
+    const shiftId = shifts[i].id;
+    let count = basePerShift;
+    // Add one extra to shifts based on rotating offset
+    if (i < remainder) {
+      const adjustedIndex = (i + dayOffset) % numShifts;
+      if (adjustedIndex < remainder) {
+        count++;
+      }
+    }
+    // Actually, simpler approach: first 'remainder' shifts get +1, but rotate which ones
+    for (let j = 0; j < basePerShift; j++) {
+      shiftSlots.push(shiftId);
+    }
   }
+  
+  // Add remainder slots with rotation
+  for (let i = 0; i < remainder; i++) {
+    const shiftIndex = (i + dayOffset) % numShifts;
+    shiftSlots.push(shifts[shiftIndex].id);
+  }
+  
+  // Sort employees by their ID for consistent ordering, then assign
+  const sortedEmployees = [...workingEmployees].sort((a, b) => a.id.localeCompare(b.id));
+  
+  // Rotate employee order based on day for fairness
+  const rotatedEmployees: Employee[] = [];
+  const rotation = (day - 1) % sortedEmployees.length;
+  for (let i = 0; i < sortedEmployees.length; i++) {
+    const idx = (i + rotation) % sortedEmployees.length;
+    rotatedEmployees.push(sortedEmployees[idx]);
+  }
+  
+  // Assign shifts
+  for (let i = 0; i < rotatedEmployees.length; i++) {
+    const emp = rotatedEmployees[i];
+    const shiftId = shiftSlots[i % shiftSlots.length];
+    shiftAssignments.set(emp.id, shiftId);
+  }
+  
+  // Increment balance offset for next day
+  dailyShiftBalance.set(balanceKey, dayOffset + 1);
 
   return shiftAssignments;
 }
@@ -225,13 +270,12 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
   const weeklyHours: Record<string, number[]> = {};
   const consecutiveWorkDays: Record<string, number> = {};
   
-  // Track shift rotation for fair distribution
-  const shiftRotationCounter = new Map<string, number>();
+  // Track daily shift balance per position (for rotating "extra" employee)
+  const dailyShiftBalance = new Map<string, number>();
   
   employees.forEach((emp) => {
     weeklyHours[emp.id] = [0, 0, 0, 0, 0, 0];
     consecutiveWorkDays[emp.id] = 0;
-    shiftRotationCounter.set(emp.id, 0);
   });
 
   // Process each day of the month
@@ -296,12 +340,13 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
         });
       }
 
-      // Assign shifts to working employees
+      // Assign shifts to working employees - balanced per position
       const shiftAssignments = assignShiftsToEmployees(
         workingToday,
         shifts,
         day,
-        shiftRotationCounter
+        position.id,
+        dailyShiftBalance
       );
 
       // Assign entries
