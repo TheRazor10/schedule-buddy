@@ -60,9 +60,8 @@ export default function ScheduleGenerator() {
   }));
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto max-w-4xl px-4 py-8">
-        {/* Header */}
+    <div className="container mx-auto max-w-4xl px-4 py-8">
+      {/* Header */}
         <div className="mb-8 text-center">
           <div className="mb-4 flex items-center justify-center gap-3">
             <Calendar className="h-10 w-10 text-primary" />
@@ -275,6 +274,5 @@ export default function ScheduleGenerator() {
           </div>
         </div>
       </div>
-    </div>
   );
 }

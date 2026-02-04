@@ -126,9 +126,8 @@ export default function EmployeeManagement() {
   const canContinue = employees.length > 0;
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto max-w-5xl px-4 py-8">
-        {/* Header */}
+    <div className="container mx-auto max-w-5xl px-4 py-8">
+      {/* Header */}
         <div className="mb-8 text-center">
           <div className="mb-4 flex items-center justify-center gap-3">
             <Users className="h-10 w-10 text-primary" />
@@ -396,6 +395,5 @@ export default function EmployeeManagement() {
           </Button>
         </div>
       </div>
-    </div>
   );
 }

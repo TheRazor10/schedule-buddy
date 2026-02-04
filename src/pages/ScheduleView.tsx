@@ -34,7 +34,7 @@ export default function ScheduleView() {
 
   if (!schedule) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex min-h-[60vh] items-center justify-center">
         <Card className="max-w-md">
           <CardHeader>
             <CardTitle>Няма генериран график</CardTitle>
@@ -86,9 +86,8 @@ export default function ScheduleView() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto max-w-full px-4 py-8">
-        {/* Header */}
+    <div className="container mx-auto max-w-full px-4 py-8">
+      {/* Header */}
         <div className="mb-8 text-center">
           <div className="mb-4 flex items-center justify-center gap-3">
             <FileSpreadsheet className="h-10 w-10 text-primary" />
@@ -419,6 +418,5 @@ export default function ScheduleView() {
           </Button>
         </div>
       </div>
-    </div>
   );
 }
