@@ -60,6 +60,7 @@ const defaultFirmSettings: FirmSettings = {
   operatingHoursStart: '08:00',
   operatingHoursEnd: '20:00',
   worksOnHolidays: false,
+  operatingDays: [1, 2, 3, 4, 5], // Monday-Friday default
   positions: [],
   shifts: [],
 };

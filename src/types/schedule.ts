@@ -21,6 +21,7 @@ export interface FirmSettings {
   operatingHoursStart: string; // HH:mm
   operatingHoursEnd: string;   // HH:mm
   worksOnHolidays: boolean;
+  operatingDays: number[];     // Days of week firm operates (0=Sunday, 1=Monday, ..., 6=Saturday)
   positions: Position[];
   shifts: Shift[];
 }
