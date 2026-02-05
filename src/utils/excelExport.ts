@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { MonthSchedule, Employee, Position, Shift } from '@/types/schedule';
 import { getMonthNameEn, getDaysInMonth } from '@/data/bulgarianCalendar2026';
+import { calculateShiftHours, formatTimeRange } from '@/utils/shiftUtils';
 
 interface ExportOptions {
   schedule: MonthSchedule;
@@ -98,17 +99,21 @@ export function exportScheduleToExcel(options: ExportOptions): void {
   // Add worksheet to workbook
   XLSX.utils.book_append_sheet(wb, ws, `${monthName} ${year}`);
 
-  // Add legend sheet with shifts
+  // Add legend sheet with shifts and their durations
   const legendData = [
-    ['Легенда', ''],
-    ['ПР', 'Празник'],
-    ['П', 'Почивка'],
-    ['', ''],
-    ['Смени:', ''],
-    ...shifts.map((s) => [s.abbreviation, `${s.name} (${s.startTime}-${s.endTime})`]),
+    ['Легенда', '', ''],
+    ['ПР', 'Празник', ''],
+    ['П', 'Почивка', ''],
+    ['', '', ''],
+    ['Смени:', '', ''],
+    ['Код', 'Смяна', 'Часове'],
+    ...shifts.map((s) => {
+      const hours = calculateShiftHours(s.startTime, s.endTime);
+      return [s.abbreviation, `${s.name} (${formatTimeRange(s.startTime, s.endTime)})`, `${hours}ч`];
+    }),
   ];
   const legendWs = XLSX.utils.aoa_to_sheet(legendData);
-  legendWs['!cols'] = [{ wch: 15 }, { wch: 30 }];
+  legendWs['!cols'] = [{ wch: 10 }, { wch: 35 }, { wch: 10 }];
   XLSX.utils.book_append_sheet(wb, legendWs, 'Легенда');
 
   // Generate filename and download

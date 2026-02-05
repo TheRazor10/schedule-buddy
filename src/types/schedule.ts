@@ -40,8 +40,10 @@ export type ScheduleEntryType = 'work' | 'rest' | 'holiday';
 
 export interface ScheduleEntry {
   type: ScheduleEntryType;
-  hours?: number;        // Hours worked (from contract)
+  hours?: number;        // Actual hours worked (from shift duration)
   shiftId?: string;      // Which shift assigned (only for 'work' type)
+  contractHours?: number; // Original contract hours
+  overtimeHours?: number; // Hours beyond contract (shift hours - contract hours)
 }
 
 export interface EmployeeSchedule {
