@@ -41,7 +41,7 @@ export function exportScheduleToExcel(options: ExportOptions): void {
     ...Array.from({ length: daysInMonth }, (_, i) => `${i + 1}`),
     'Общо часове',
     'Почивни дни',
-    'Статус',
+    'Подпис',
   ];
 
   // Build data rows
@@ -74,7 +74,7 @@ export function exportScheduleToExcel(options: ExportOptions): void {
     // Add totals
     row.push(empSchedule.totalHours);
     row.push(empSchedule.totalRestDays);
-    row.push(empSchedule.isCompliant ? '✓' : '⚠');
+    row.push(''); // Empty signature column for employee to sign
 
     data.push(row);
   });
@@ -91,7 +91,7 @@ export function exportScheduleToExcel(options: ExportOptions): void {
     ...Array.from({ length: daysInMonth }, () => ({ wch: 5 })), // Days
     { wch: 12 }, // Total Hours
     { wch: 12 }, // Rest Days
-    { wch: 8 }, // Status
+    { wch: 15 }, // Signature
   ];
   ws['!cols'] = colWidths;
 
@@ -106,9 +106,6 @@ export function exportScheduleToExcel(options: ExportOptions): void {
     ['', ''],
     ['Смени:', ''],
     ...shifts.map((s) => [s.abbreviation, `${s.name} (${s.startTime}-${s.endTime})`]),
-    ['', ''],
-    ['✓', 'Съответства на изискванията'],
-    ['⚠', 'Има предупреждения'],
   ];
   const legendWs = XLSX.utils.aoa_to_sheet(legendData);
   legendWs['!cols'] = [{ wch: 15 }, { wch: 30 }];

@@ -6,6 +6,7 @@ export interface Shift {
   abbreviation: string; // Short code for display (e.g., "С", "В")
   startTime: string;    // HH:mm
   endTime: string;      // HH:mm
+  breakMinutes: number; // Break duration in minutes
 }
 
 export interface Position {
@@ -30,7 +31,7 @@ export interface Employee {
   lastName: string;
   egn: string;          // 10-digit Bulgarian ID
   positionId: string;   // Reference to Position
-  contractHours: 2 | 4 | 6 | 7 | 8;
+  contractHours: 2 | 4 | 6 | 7 | 8 | 12;
   isMinor: boolean;     // Calculated from EGN
   birthDate: Date;      // Extracted from EGN
 }
