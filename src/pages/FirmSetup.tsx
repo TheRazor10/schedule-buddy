@@ -7,9 +7,20 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Building2, Clock, ArrowRight, Users } from 'lucide-react';
+import { Plus, Trash2, Building2, Clock, ArrowRight, Users, Calendar } from 'lucide-react';
 import { Position, Shift } from '@/types/schedule';
 import TimeInput from '@/components/TimeInput';
+import { Checkbox } from '@/components/ui/checkbox';
+
+const WEEKDAYS = [
+  { value: 1, label: 'Понеделник' },
+  { value: 2, label: 'Вторник' },
+  { value: 3, label: 'Сряда' },
+  { value: 4, label: 'Четвъртък' },
+  { value: 5, label: 'Петък' },
+  { value: 6, label: 'Събота' },
+  { value: 0, label: 'Неделя' },
+];
 
 export default function FirmSetup() {
   const navigate = useNavigate();
@@ -20,6 +31,7 @@ export default function FirmSetup() {
   const [operatingStart, setOperatingStart] = useState(firmSettings.operatingHoursStart);
   const [operatingEnd, setOperatingEnd] = useState(firmSettings.operatingHoursEnd);
   const [worksOnHolidays, setWorksOnHolidays] = useState(firmSettings.worksOnHolidays);
+  const [operatingDays, setOperatingDays] = useState<number[]>(firmSettings.operatingDays || [1, 2, 3, 4, 5]);
 
   // New position form
   const [newPositionName, setNewPositionName] = useState('');
@@ -66,6 +78,14 @@ export default function FirmSetup() {
     setNewShiftBreak('60');
   };
 
+  const toggleOperatingDay = (day: number) => {
+    setOperatingDays(prev => 
+      prev.includes(day) 
+        ? prev.filter(d => d !== day)
+        : [...prev, day].sort((a, b) => a - b)
+    );
+  };
+
   const handleContinue = () => {
     setFirmSettings({
       firmName,
@@ -73,6 +93,7 @@ export default function FirmSetup() {
       operatingHoursStart: operatingStart,
       operatingHoursEnd: operatingEnd,
       worksOnHolidays,
+      operatingDays,
       positions: firmSettings.positions,
       shifts: firmSettings.shifts,
     });
@@ -178,6 +199,43 @@ export default function FirmSetup() {
                   onCheckedChange={setWorksOnHolidays}
                 />
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Operating Days Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Работни дни
+              </CardTitle>
+              <CardDescription>
+                Изберете кои дни от седмицата фирмата работи. В дните, когато фирмата не работи, служителите автоматично ще имат почивка.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+                {WEEKDAYS.map((day) => (
+                  <div
+                    key={day.value}
+                    className={`flex cursor-pointer items-center gap-2 rounded-lg border p-3 transition-colors ${
+                      operatingDays.includes(day.value)
+                        ? 'border-primary bg-primary/10'
+                        : 'hover:bg-muted/50'
+                    }`}
+                    onClick={() => toggleOperatingDay(day.value)}
+                  >
+                    <Checkbox
+                      checked={operatingDays.includes(day.value)}
+                      onCheckedChange={() => toggleOperatingDay(day.value)}
+                    />
+                    <span className="text-sm font-medium">{day.label}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Избрани: <strong>{operatingDays.length}</strong> дни от седмицата
+              </p>
             </CardContent>
           </Card>
 

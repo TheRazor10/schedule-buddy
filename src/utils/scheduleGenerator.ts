@@ -51,7 +51,10 @@ function planRestDaysForPosition(
   targetWorkDays: number,
   holidayDays: Set<number>,
   worksOnHolidays: boolean,
-  shifts: Shift[]
+  shifts: Shift[],
+  firmOperatingDays: Set<number>,
+  month: number,
+  year: number
 ): Map<string, Set<number>> {
   const restDaysMap = new Map<string, Set<number>>();
   positionEmployees.forEach((emp) => restDaysMap.set(emp.id, new Set<number>()));
@@ -73,7 +76,10 @@ function planRestDaysForPosition(
       targetWorkDays,
       holidayDays,
       worksOnHolidays,
-      hasExtendedShifts
+      hasExtendedShifts,
+      firmOperatingDays,
+      month,
+      year
     );
   }
 
@@ -83,7 +89,10 @@ function planRestDaysForPosition(
     daysInMonth,
     targetWorkDays,
     holidayDays,
-    worksOnHolidays
+    worksOnHolidays,
+    firmOperatingDays,
+    month,
+    year
   );
 }
 
@@ -97,7 +106,10 @@ function planHandoffSchedule(
   targetWorkDays: number,
   holidayDays: Set<number>,
   worksOnHolidays: boolean,
-  hasExtendedShifts: boolean
+  hasExtendedShifts: boolean,
+  firmOperatingDays: Set<number>,
+  month: number,
+  year: number
 ): Map<string, Set<number>> {
   const restDaysMap = new Map<string, Set<number>>();
   const [empA, empB] = employees;
@@ -108,10 +120,13 @@ function planHandoffSchedule(
   const restDaysA = restDaysMap.get(empA.id)!;
   const restDaysB = restDaysMap.get(empB.id)!;
   
-  // Get workable days (exclude holidays if firm doesn't work)
+  // Get workable days (exclude holidays if firm doesn't work AND exclude firm-closed days)
   const workableDays: number[] = [];
   for (let day = 1; day <= daysInMonth; day++) {
     if (!worksOnHolidays && holidayDays.has(day)) continue;
+    // Check if this day of week is a firm operating day
+    const dayOfWeek = new Date(year, month - 1, day).getDay();
+    if (!firmOperatingDays.has(dayOfWeek)) continue;
     workableDays.push(day);
   }
   
@@ -199,28 +214,31 @@ function planStandardRestDays(
   daysInMonth: number,
   targetWorkDays: number,
   holidayDays: Set<number>,
-  worksOnHolidays: boolean
+  worksOnHolidays: boolean,
+  firmOperatingDays: Set<number>,
+  month: number,
+  year: number
 ): Map<string, Set<number>> {
   const restDaysMap = new Map<string, Set<number>>();
   positionEmployees.forEach((emp) => restDaysMap.set(emp.id, new Set<number>()));
 
-  // Calculate how many rest days each employee needs
-  const holidayCount = worksOnHolidays ? 0 : holidayDays.size;
-  const availableWorkDays = daysInMonth - holidayCount;
-  const restDaysNeeded = Math.max(0, availableWorkDays - targetWorkDays);
+  // Get workable days (exclude holidays if firm doesn't work AND exclude firm-closed days)
+  const workableDays: number[] = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    if (!worksOnHolidays && holidayDays.has(day)) continue;
+    const dayOfWeek = new Date(year, month - 1, day).getDay();
+    if (!firmOperatingDays.has(dayOfWeek)) continue;
+    workableDays.push(day);
+  }
+
+  // Calculate how many rest days each employee needs from the workable days
+  const restDaysNeeded = Math.max(0, workableDays.length - targetWorkDays);
 
   // For each employee, distribute rest days evenly across the month
   for (const emp of positionEmployees) {
     const empRests = restDaysMap.get(emp.id)!;
     
     if (restDaysNeeded <= 0) continue;
-    
-    // Get workable days (exclude holidays if firm doesn't work)
-    const workableDays: number[] = [];
-    for (let day = 1; day <= daysInMonth; day++) {
-      if (!worksOnHolidays && holidayDays.has(day)) continue;
-      workableDays.push(day);
-    }
     
     // Calculate ideal spacing between rest days
     const spacing = workableDays.length / (restDaysNeeded + 1);
@@ -370,7 +388,7 @@ function assignShiftsToEmployees(
  */
 export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedule {
   const { firmSettings, employees, month, year } = options;
-  const { positions, shifts, worksOnHolidays } = firmSettings;
+  const { positions, shifts, worksOnHolidays, operatingDays } = firmSettings;
   
   const monthData = getMonthData(month);
   const daysInMonth = getDaysInMonth(month, year);
@@ -378,6 +396,9 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
   
   // Get holidays for this month
   const holidayDays = new Set(monthData.holidays);
+  
+  // Get firm operating days (default to Mon-Fri if not set)
+  const firmOperatingDays = new Set(operatingDays ?? [1, 2, 3, 4, 5]);
   
   // Initialize employee schedules
   const employeeSchedules: EmployeeSchedule[] = employees.map((emp) => ({
@@ -411,7 +432,10 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
       calendarWorkingDays,
       holidayDays,
       worksOnHolidays,
-      shifts
+      shifts,
+      firmOperatingDays,
+      month,
+      year
     );
     
     restPlan.forEach((restDays, empId) => {
@@ -456,6 +480,18 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
         for (const emp of positionEmployees) {
           const empSchedule = scheduleMap.get(emp.id)!;
           empSchedule.entries[day] = { type: 'holiday' };
+          consecutiveWorkDays[emp.id] = 0;
+        }
+        continue;
+      }
+      
+      // Handle firm closed days (days of week when firm doesn't operate)
+      const dayOfWeek = currentDate.getDay(); // 0=Sunday, 1=Monday, etc.
+      if (!firmOperatingDays.has(dayOfWeek)) {
+        for (const emp of positionEmployees) {
+          const empSchedule = scheduleMap.get(emp.id)!;
+          empSchedule.entries[day] = { type: 'rest' };
+          empSchedule.totalRestDays++;
           consecutiveWorkDays[emp.id] = 0;
         }
         continue;
