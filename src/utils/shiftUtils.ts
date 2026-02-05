@@ -46,7 +46,16 @@ export function formatShiftDuration(startTime: string, endTime: string): string 
 }
 
 /**
- * Calculate overtime hours (shift hours - contract hours)
+ * Calculate net shift hours (raw duration minus break time)
+ * This is the actual working time that counts toward contract hours
+ */
+export function calculateNetShiftHours(startTime: string, endTime: string, breakMinutes: number = 0): number {
+  const rawHours = calculateShiftHours(startTime, endTime);
+  return rawHours - (breakMinutes / 60);
+}
+
+/**
+ * Calculate overtime hours (net shift hours - contract hours)
  * Returns 0 if no overtime
  */
 export function calculateOvertime(shiftHours: number, contractHours: number): number {

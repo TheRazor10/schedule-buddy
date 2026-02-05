@@ -8,7 +8,7 @@ import {
   Shift,
 } from '@/types/schedule';
 import { getMonthData, getDaysInMonth, isHoliday } from '@/data/bulgarianCalendar2026';
-import { calculateShiftHours, isExtendedShift, calculateOvertime } from '@/utils/shiftUtils';
+import { calculateShiftHours, isExtendedShift, calculateOvertime, calculateNetShiftHours } from '@/utils/shiftUtils';
 
 interface ScheduleGeneratorOptions {
   firmSettings: FirmSettings;
@@ -33,7 +33,8 @@ function getEmployeesByPosition(
 
 /**
  * Check if a position uses the "handoff" pattern
- * Handoff pattern: 2 employees, minPerDay=1 → they take turns
+ * Handoff pattern: 2 employees, minPerDay=1 → ensure coverage, stagger rest days
+ * Both employees can work on the same day - just ensure at least 1 is always working
  */
 function isHandoffPosition(position: Position, employeeCount: number): boolean {
   return employeeCount === 2 && position.minPerDay === 1;
@@ -97,8 +98,9 @@ function planRestDaysForPosition(
 }
 
 /**
- * Plan handoff schedule for 2 employees taking turns
- * When Employee A works, Employee B rests (and vice versa)
+ * Plan handoff schedule for 2 employees ensuring coverage
+ * Both employees work toward target days, but rest days are staggered
+ * so at least one person is always working
  */
 function planHandoffSchedule(
   employees: Employee[],
@@ -124,84 +126,70 @@ function planHandoffSchedule(
   const workableDays: number[] = [];
   for (let day = 1; day <= daysInMonth; day++) {
     if (!worksOnHolidays && holidayDays.has(day)) continue;
-    // Check if this day of week is a firm operating day
     const dayOfWeek = new Date(year, month - 1, day).getDay();
     if (!firmOperatingDays.has(dayOfWeek)) continue;
     workableDays.push(day);
   }
   
-  if (hasExtendedShifts) {
-    // 2-on-2-off pattern for extended shifts
-    // Employee A: Work 1-2, Rest 3-4, Work 5-6, Rest 7-8...
-    // Employee B: Rest 1-2, Work 3-4, Rest 5-6, Work 7-8...
-    let dayIndex = 0;
-    let isAWorking = true; // A starts working, B starts resting
-    
-    while (dayIndex < workableDays.length) {
-      // Assign 2 days at a time
-      for (let i = 0; i < 2 && dayIndex < workableDays.length; i++) {
-        const day = workableDays[dayIndex];
-        
-        if (isAWorking) {
-          // A works, B rests
-          restDaysB.add(day);
-        } else {
-          // A rests, B works
-          restDaysA.add(day);
-        }
-        
-        dayIndex++;
-      }
-      
-      // Toggle who's working for next 2-day block
-      isAWorking = !isAWorking;
-    }
-  } else {
-    // Standard alternating pattern for regular shifts
-    // Employee A: Work day 1, Rest day 2, Work day 3...
-    // Employee B: Rest day 1, Work day 2, Rest day 3...
-    for (let i = 0; i < workableDays.length; i++) {
-      const day = workableDays[i];
-      
-      if (i % 2 === 0) {
-        // Even days: A works, B rests
-        restDaysB.add(day);
-      } else {
-        // Odd days: A rests, B works
-        restDaysA.add(day);
-      }
-    }
+  // Calculate how many rest days each employee needs
+  const restDaysNeeded = Math.max(0, workableDays.length - targetWorkDays);
+  
+  if (restDaysNeeded <= 0) {
+    // No rest days needed - both work every workable day
+    return restDaysMap;
   }
   
-  // Verify both employees meet target work days (adjust if needed)
-  const aWorkDays = workableDays.length - restDaysA.size;
-  const bWorkDays = workableDays.length - restDaysB.size;
+  // Distribute rest days for both employees, but stagger them so they don't overlap
+  // This ensures at least 1 person is always working
   
-  // If either employee has too many work days, convert some to rest
-  // Priority: meet target while maintaining alternation
-  const adjustRestDays = (empRests: Set<number>, otherRests: Set<number>, currentWorkDays: number) => {
-    if (currentWorkDays <= targetWorkDays) return;
+  // Calculate ideal spacing between rest days
+  const spacing = workableDays.length / (restDaysNeeded + 1);
+  
+  // Assign rest days for Employee A at regular intervals
+  for (let i = 1; i <= restDaysNeeded; i++) {
+    const idealIndex = Math.floor(i * spacing) - 1;
+    const dayIndex = Math.min(Math.max(0, idealIndex), workableDays.length - 1);
     
-    const excess = currentWorkDays - targetWorkDays;
-    let added = 0;
+    // Find day that isn't already a rest day
+    let selectedDay = workableDays[dayIndex];
+    let offset = 0;
+    while (restDaysA.has(selectedDay)) {
+      offset++;
+      const tryIndex = (dayIndex + offset) % workableDays.length;
+      selectedDay = workableDays[tryIndex];
+      if (offset > workableDays.length) break;
+    }
+    restDaysA.add(selectedDay);
+  }
+  
+  // Assign rest days for Employee B, offset from A's rest days
+  // Use half-spacing offset to stagger rest days
+  const offsetShift = Math.floor(spacing / 2);
+  
+  for (let i = 1; i <= restDaysNeeded; i++) {
+    const idealIndex = Math.floor(i * spacing) - 1 + offsetShift;
+    const dayIndex = Math.min(Math.max(0, idealIndex), workableDays.length - 1);
     
-    // Find days where we can add rest without both resting
-    for (const day of workableDays) {
-      if (added >= excess) break;
-      if (!empRests.has(day) && otherRests.has(day)) {
-        // Other is already resting - can't add rest here (both would rest)
-        continue;
-      }
-      if (!empRests.has(day) && !otherRests.has(day)) {
-        // Both working this day - we can rest one, other keeps working
-        empRests.add(day);
-        added++;
+    // Find day that isn't already a rest day for B AND isn't same as A's rest
+    let selectedDay = workableDays[dayIndex];
+    let offset = 0;
+    while (restDaysB.has(selectedDay) || restDaysA.has(selectedDay)) {
+      offset++;
+      const tryIndex = (dayIndex + offset) % workableDays.length;
+      selectedDay = workableDays[tryIndex];
+      if (offset > workableDays.length) {
+        // If we can't find a non-overlapping day, just pick any non-rest day for B
+        for (const day of workableDays) {
+          if (!restDaysB.has(day)) {
+            selectedDay = day;
+            break;
+          }
+        }
+        break;
       }
     }
-  };
-  
-  adjustRestDays(restDaysA, restDaysB, aWorkDays);
-  adjustRestDays(restDaysB, restDaysA, bWorkDays);
+    restDaysB.add(selectedDay);
+  }
   
   return restDaysMap;
 }
@@ -574,8 +562,9 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
           const shiftId = shiftAssignments.get(emp.id);
           const shift = shifts.find(s => s.id === shiftId);
           
-          // Calculate actual hours from shift duration (not contract hours)
-          const shiftHours = shift ? calculateShiftHours(shift.startTime, shift.endTime) : emp.contractHours;
+          // Calculate NET hours from shift duration minus break time
+          const breakMinutes = shift?.breakMinutes ?? 0;
+          const shiftHours = shift ? calculateNetShiftHours(shift.startTime, shift.endTime, breakMinutes) : emp.contractHours;
           const overtime = calculateOvertime(shiftHours, emp.contractHours);
           const isExtended = shift ? isExtendedShift(shift.startTime, shift.endTime) : false;
           
