@@ -24,7 +24,6 @@ import {
 import { Users, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, AlertTriangle, Check } from 'lucide-react';
 import { Employee } from '@/types/schedule';
 import { validateEGN, extractBirthDateFromEGN, isMinorFromEGN } from '@/utils/egnUtils';
-import { formatPresenceTime, getTotalPresenceHours } from '@/utils/workTimeUtils';
 
 export default function EmployeeManagement() {
   const navigate = useNavigate();
@@ -88,7 +87,7 @@ export default function EmployeeManagement() {
       lastName: lastName.trim(),
       egn,
       positionId,
-      contractHours: parseInt(contractHours) as 2 | 4 | 6 | 7 | 8,
+      contractHours: parseInt(contractHours) as 2 | 4 | 6 | 7 | 8 | 12,
       isMinor,
       birthDate: birthDate || new Date(),
     };
@@ -254,13 +253,16 @@ export default function EmployeeManagement() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="8" disabled={isMinor}>
-                            8 часа ({getTotalPresenceHours(8)}ч с почивка) {isMinor && '— недостъпно за непълнолетни'}
+                          <SelectItem value="12" disabled={isMinor}>
+                            12 часа {isMinor && '— недостъпно за непълнолетни'}
                           </SelectItem>
-                          <SelectItem value="7">7 часа ({getTotalPresenceHours(7)}ч с почивка)</SelectItem>
-                          <SelectItem value="6">6 часа ({getTotalPresenceHours(6)}ч с почивка)</SelectItem>
-                          <SelectItem value="4">4 часа ({getTotalPresenceHours(4)}ч с почивка)</SelectItem>
-                          <SelectItem value="2">2 часа (без почивка)</SelectItem>
+                          <SelectItem value="8" disabled={isMinor}>
+                            8 часа {isMinor && '— недостъпно за непълнолетни'}
+                          </SelectItem>
+                          <SelectItem value="7">7 часа</SelectItem>
+                          <SelectItem value="6">6 часа</SelectItem>
+                          <SelectItem value="4">4 часа</SelectItem>
+                          <SelectItem value="2">2 часа</SelectItem>
                         </SelectContent>
                       </Select>
                       {isMinor && (
@@ -332,8 +334,8 @@ export default function EmployeeManagement() {
                           </TableCell>
                           <TableCell>{getPositionName(employee.positionId)}</TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline" title={formatPresenceTime(employee.contractHours)}>
-                              {employee.contractHours}ч → {getTotalPresenceHours(employee.contractHours)}ч
+                            <Badge variant="outline">
+                              {employee.contractHours}ч
                             </Badge>
                           </TableCell>
                           <TableCell className="text-center">

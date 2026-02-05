@@ -29,6 +29,7 @@ export default function FirmSetup() {
   const [newShiftAbbr, setNewShiftAbbr] = useState('');
   const [newShiftStart, setNewShiftStart] = useState('09:00');
   const [newShiftEnd, setNewShiftEnd] = useState('18:00');
+  const [newShiftBreak, setNewShiftBreak] = useState('60');
 
   const handleAddPosition = () => {
     if (!newPositionName.trim()) return;
@@ -53,6 +54,7 @@ export default function FirmSetup() {
       abbreviation: newShiftAbbr.trim().toUpperCase(),
       startTime: newShiftStart,
       endTime: newShiftEnd,
+      breakMinutes: parseInt(newShiftBreak) || 0,
     };
     
     addShift(newShift);
@@ -60,6 +62,7 @@ export default function FirmSetup() {
     setNewShiftAbbr('');
     setNewShiftStart('09:00');
     setNewShiftEnd('18:00');
+    setNewShiftBreak('60');
   };
 
   const handleContinue = () => {
@@ -206,7 +209,7 @@ export default function FirmSetup() {
                         <div>
                           <span className="font-medium">{shift.name}</span>
                           <span className="ml-2 text-sm text-muted-foreground">
-                            ({shift.startTime} - {shift.endTime})
+                            ({shift.startTime} - {shift.endTime}, почивка: {shift.breakMinutes || 0} мин)
                           </span>
                         </div>
                       </div>
@@ -226,7 +229,7 @@ export default function FirmSetup() {
               {/* Add new shift form */}
               <div className="rounded-lg border border-dashed p-4">
                 <p className="mb-3 text-sm font-medium">Добави нова смяна</p>
-                <div className="grid gap-3 sm:grid-cols-4">
+                <div className="grid gap-3 sm:grid-cols-5">
                   <div className="space-y-1 sm:col-span-2">
                     <Label htmlFor="shiftName" className="text-xs">
                       Име на смяната
@@ -250,7 +253,7 @@ export default function FirmSetup() {
                       maxLength={2}
                     />
                   </div>
-                  <div className="space-y-1">
+                  <div className="space-y-1 sm:col-span-2">
                     <Label htmlFor="shiftStart" className="text-xs">
                       Начало
                     </Label>
@@ -272,6 +275,19 @@ export default function FirmSetup() {
                       onChange={(e) => setNewShiftEnd(e.target.value)}
                     />
                   </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="shiftBreak" className="text-xs">
+                      Почивка (мин)
+                    </Label>
+                    <Input
+                      id="shiftBreak"
+                      type="number"
+                      min="0"
+                      max="120"
+                      value={newShiftBreak}
+                      onChange={(e) => setNewShiftBreak(e.target.value)}
+                    />
+                  </div>
                 </div>
                 <Button
                   onClick={handleAddShift}
@@ -285,7 +301,7 @@ export default function FirmSetup() {
 
               {/* Example hint */}
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
-                <strong>Пример:</strong> Сутрешна смяна (С) 09:00-18:00, Вечерна смяна (В) 13:00-22:00
+                <strong>Пример:</strong> Сутрешна смяна (С) 09:00-18:00 с 60 мин почивка, Вечерна смяна (В) 14:00-22:00 с 30 мин почивка
               </div>
             </CardContent>
           </Card>

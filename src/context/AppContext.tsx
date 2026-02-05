@@ -34,7 +34,7 @@ interface AppContextType extends AppState {
   createFirm: (name?: string) => Promise<string>;
   deleteFirm: (firmId: string) => Promise<void>;
   renameFirm: (firmId: string, newName: string) => Promise<void>;
-  refreshFirmsList: () => Promise<void>;
+  refreshFirmsList: () => Promise<FirmListItem[]>;
   exportCurrentFirm: () => void;
   importFirm: (file: File) => Promise<string>;
   // Settings management
