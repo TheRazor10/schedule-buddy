@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Plus, Trash2, Building2, Clock, ArrowRight, Users } from 'lucide-react';
 import { Position, Shift } from '@/types/schedule';
+import TimeInput from '@/components/TimeInput';
 
 export default function FirmSetup() {
   const navigate = useNavigate();
@@ -149,20 +150,18 @@ export default function FirmSetup() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="operatingStart">Начало на работния ден</Label>
-                  <Input
+                  <TimeInput
                     id="operatingStart"
-                    type="time"
                     value={operatingStart}
-                    onChange={(e) => setOperatingStart(e.target.value)}
+                    onChange={setOperatingStart}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="operatingEnd">Край на работния ден</Label>
-                  <Input
+                  <TimeInput
                     id="operatingEnd"
-                    type="time"
                     value={operatingEnd}
-                    onChange={(e) => setOperatingEnd(e.target.value)}
+                    onChange={setOperatingEnd}
                   />
                 </div>
               </div>
@@ -229,7 +228,7 @@ export default function FirmSetup() {
               {/* Add new shift form */}
               <div className="rounded-lg border border-dashed p-4">
                 <p className="mb-3 text-sm font-medium">Добави нова смяна</p>
-                <div className="grid gap-3 sm:grid-cols-5">
+                <div className="grid gap-3 sm:grid-cols-6">
                   <div className="space-y-1 sm:col-span-2">
                     <Label htmlFor="shiftName" className="text-xs">
                       Име на смяната
@@ -253,26 +252,24 @@ export default function FirmSetup() {
                       maxLength={2}
                     />
                   </div>
-                  <div className="space-y-1 sm:col-span-2">
+                  <div className="space-y-1">
                     <Label htmlFor="shiftStart" className="text-xs">
                       Начало
                     </Label>
-                    <Input
+                    <TimeInput
                       id="shiftStart"
-                      type="time"
                       value={newShiftStart}
-                      onChange={(e) => setNewShiftStart(e.target.value)}
+                      onChange={setNewShiftStart}
                     />
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="shiftEnd" className="text-xs">
                       Край
                     </Label>
-                    <Input
+                    <TimeInput
                       id="shiftEnd"
-                      type="time"
                       value={newShiftEnd}
-                      onChange={(e) => setNewShiftEnd(e.target.value)}
+                      onChange={setNewShiftEnd}
                     />
                   </div>
                   <div className="space-y-1">
