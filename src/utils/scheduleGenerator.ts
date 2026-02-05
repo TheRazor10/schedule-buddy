@@ -49,7 +49,7 @@ function planRestDaysForPosition(
   positionEmployees: Employee[],
   position: Position,
   daysInMonth: number,
-  targetWorkDays: number,
+  targetWorkDaysMap: Map<string, number>, // Per-employee target work days
   holidayDays: Set<number>,
   worksOnHolidays: boolean,
   shifts: Shift[],
@@ -71,10 +71,14 @@ function planRestDaysForPosition(
   if (useHandoffPattern) {
     // HANDOFF PATTERN: Employee A and B take turns
     // Employee B's schedule = inverse of Employee A's schedule
+    // Use average target for handoff (both should have similar targets)
+    const avgTarget = Math.round(
+      [...targetWorkDaysMap.values()].reduce((a, b) => a + b, 0) / targetWorkDaysMap.size
+    );
     return planHandoffSchedule(
       positionEmployees,
       daysInMonth,
-      targetWorkDays,
+      avgTarget,
       holidayDays,
       worksOnHolidays,
       hasExtendedShifts,
@@ -88,7 +92,7 @@ function planRestDaysForPosition(
   return planStandardRestDays(
     positionEmployees,
     daysInMonth,
-    targetWorkDays,
+    targetWorkDaysMap,
     holidayDays,
     worksOnHolidays,
     firmOperatingDays,
@@ -200,7 +204,7 @@ function planHandoffSchedule(
 function planStandardRestDays(
   positionEmployees: Employee[],
   daysInMonth: number,
-  targetWorkDays: number,
+  targetWorkDaysMap: Map<string, number>, // Per-employee target work days
   holidayDays: Set<number>,
   worksOnHolidays: boolean,
   firmOperatingDays: Set<number>,
@@ -219,12 +223,13 @@ function planStandardRestDays(
     workableDays.push(day);
   }
 
-  // Calculate how many rest days each employee needs from the workable days
-  const restDaysNeeded = Math.max(0, workableDays.length - targetWorkDays);
-
   // For each employee, distribute rest days evenly across the month
   for (const emp of positionEmployees) {
     const empRests = restDaysMap.get(emp.id)!;
+    
+    // Calculate per-employee rest days based on their target
+    const empTargetDays = targetWorkDaysMap.get(emp.id) || workableDays.length;
+    const restDaysNeeded = Math.max(0, workableDays.length - empTargetDays);
     
     if (restDaysNeeded <= 0) continue;
     
@@ -270,6 +275,8 @@ function planStandardRestDays(
     const restArray = [...empRests].sort((a, b) => a - b);
     
     // Shift rest days by an offset based on employee index
+    const empTargetDays = targetWorkDaysMap.get(employeeList[i].id) || workableDays.length;
+    const restDaysNeeded = Math.max(1, workableDays.length - empTargetDays);
     const shiftAmount = Math.floor(i * (30 / positionEmployees.length / restDaysNeeded));
     
     if (shiftAmount > 0 && restArray.length > 0) {
@@ -411,13 +418,27 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
   // Pre-plan rest days for each position using rotation
   const plannedRestDays = new Map<string, Set<number>>();
   
+  // Calculate calendar-based target hours (standard full-time equivalent)
+  const calendarTargetHours = calendarWorkingDays * 8;
+  
   for (const position of positions) {
     const positionEmployees = employeesByPosition.get(position.id) || [];
+    
+    // Build per-employee target work days map based on contract hours
+    const targetWorkDaysMap = new Map<string, number>();
+    for (const emp of positionEmployees) {
+      // Target days = calendarTargetHours ÷ contractHours
+      // For 8h contract: 160 ÷ 8 = 20 days
+      // For 12h contract: 160 ÷ 12 = ~13 days
+      const targetDays = Math.ceil(calendarTargetHours / emp.contractHours);
+      targetWorkDaysMap.set(emp.id, targetDays);
+    }
+    
     const restPlan = planRestDaysForPosition(
       positionEmployees,
       position,
       daysInMonth,
-      calendarWorkingDays,
+      targetWorkDaysMap,
       holidayDays,
       worksOnHolidays,
       shifts,
@@ -583,9 +604,10 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
           // Track extended shift consecutive days
           if (isExtended) {
             consecutiveExtendedDays[emp.id]++;
-            // If just completed 2 extended shifts, require 1-2 day rest (we use 2)
+            // If just completed 2 extended shifts, require 1 day rest (2-on-1-off pattern)
+            // This allows 12h employees to work ~13-14 days/month to reach ~160h target
             if (consecutiveExtendedDays[emp.id] >= 2) {
-              needsExtendedRest[emp.id] = 2; // 2-on-2-off pattern
+              needsExtendedRest[emp.id] = 1; // 2-on-1-off pattern
             }
           } else {
             // Reset extended counter on non-extended shift
