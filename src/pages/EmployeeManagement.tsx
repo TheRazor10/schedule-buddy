@@ -87,7 +87,7 @@ export default function EmployeeManagement() {
       lastName: lastName.trim(),
       egn,
       positionId,
-      contractHours: parseInt(contractHours) as 2 | 4 | 6 | 7 | 8 | 12,
+      contractHours: parseInt(contractHours) as 2 | 4 | 6 | 7 | 8 | 10 | 12,
       isMinor,
       birthDate: birthDate || new Date(),
     };
@@ -255,6 +255,9 @@ export default function EmployeeManagement() {
                         <SelectContent>
                           <SelectItem value="12" disabled={isMinor}>
                             12 часа {isMinor && '— недостъпно за непълнолетни'}
+                          </SelectItem>
+                          <SelectItem value="10" disabled={isMinor}>
+                            10 часа {isMinor && '— недостъпно за непълнолетни'}
                           </SelectItem>
                           <SelectItem value="8" disabled={isMinor}>
                             8 часа {isMinor && '— недостъпно за непълнолетни'}
