@@ -32,7 +32,7 @@ export interface Employee {
   lastName: string;
   egn: string;          // 10-digit Bulgarian ID
   positionId: string;   // Reference to Position
-  contractHours: 2 | 4 | 6 | 7 | 8 | 12;
+  contractHours: 2 | 4 | 6 | 7 | 8 | 10 | 12;
   isMinor: boolean;     // Calculated from EGN
   birthDate: Date;      // Extracted from EGN
 }
