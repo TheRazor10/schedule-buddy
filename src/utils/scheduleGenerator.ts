@@ -8,6 +8,7 @@ import {
   Shift,
 } from '@/types/schedule';
 import { getMonthData, getDaysInMonth, isHoliday } from '@/data/bulgarianCalendar2026';
+import { calculateShiftHours, isExtendedShift, calculateOvertime } from '@/utils/shiftUtils';
 
 interface ScheduleGeneratorOptions {
   firmSettings: FirmSettings;
@@ -269,6 +270,10 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
   // Track weekly hours for compliance checking
   const weeklyHours: Record<string, number[]> = {};
   const consecutiveWorkDays: Record<string, number> = {};
+  // Track consecutive EXTENDED shift days (for 2-on rule)
+  const consecutiveExtendedDays: Record<string, number> = {};
+  // Track if employee just finished extended shift block (needs 1-2 day rest)
+  const needsExtendedRest: Record<string, number> = {}; // days of rest still needed
   
   // Track daily shift balance per position (for rotating "extra" employee)
   const dailyShiftBalance = new Map<string, number>();
@@ -276,6 +281,8 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
   employees.forEach((emp) => {
     weeklyHours[emp.id] = [0, 0, 0, 0, 0, 0];
     consecutiveWorkDays[emp.id] = 0;
+    consecutiveExtendedDays[emp.id] = 0;
+    needsExtendedRest[emp.id] = 0;
   });
 
   // Process each day of the month
@@ -300,7 +307,7 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
       }
 
       // Determine who works and who rests based on pre-planned rotation
-      // But also check legal constraints
+      // But also check legal constraints INCLUDING extended shift rules
       const workingToday: Employee[] = [];
       const restingToday: Employee[] = [];
 
@@ -312,10 +319,18 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
         const weeklyLimit = emp.isMinor ? 35 : 56;
         const currentWeekHours = weeklyHours[emp.id][weekIndex] || 0;
         
+        // Check if employee needs rest after extended shift block
+        const needsExtendedRestDays = needsExtendedRest[emp.id] > 0;
+        
+        // Check if employee has worked 2 consecutive extended shifts (max allowed)
+        const maxExtendedReached = consecutiveExtendedDays[emp.id] >= 2;
+
         const mustRestLegal = 
           consecutiveWorkDays[emp.id] >= 6 ||
           currentWeekHours >= weeklyLimit ||
-          (isHolidayDay && emp.isMinor);
+          (isHolidayDay && emp.isMinor) ||
+          needsExtendedRestDays ||  // Must rest after extended shift block
+          maxExtendedReached;       // Must rest after 2 consecutive extended shifts
 
         if (mustRestLegal) {
           restingToday.push(emp);
@@ -357,14 +372,45 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
           empSchedule.entries[day] = { type: 'rest' };
           empSchedule.totalRestDays++;
           consecutiveWorkDays[emp.id] = 0;
+          
+          // Decrement extended rest counter if needed
+          if (needsExtendedRest[emp.id] > 0) {
+            needsExtendedRest[emp.id]--;
+          }
+          // Reset consecutive extended days on rest
+          consecutiveExtendedDays[emp.id] = 0;
         } else {
-          const hours = emp.contractHours;
           const shiftId = shiftAssignments.get(emp.id);
-          empSchedule.entries[day] = { type: 'work', hours, shiftId };
-          empSchedule.totalHours += hours;
+          const shift = shifts.find(s => s.id === shiftId);
+          
+          // Calculate actual hours from shift duration (not contract hours)
+          const shiftHours = shift ? calculateShiftHours(shift.startTime, shift.endTime) : emp.contractHours;
+          const overtime = calculateOvertime(shiftHours, emp.contractHours);
+          const isExtended = shift ? isExtendedShift(shift.startTime, shift.endTime) : false;
+          
+          empSchedule.entries[day] = { 
+            type: 'work', 
+            hours: shiftHours,  // Actual shift hours worked
+            shiftId,
+            contractHours: emp.contractHours,
+            overtimeHours: overtime
+          };
+          empSchedule.totalHours += shiftHours;
           empSchedule.totalWorkDays++;
           consecutiveWorkDays[emp.id]++;
-          weeklyHours[emp.id][weekIndex] = (weeklyHours[emp.id][weekIndex] || 0) + hours;
+          weeklyHours[emp.id][weekIndex] = (weeklyHours[emp.id][weekIndex] || 0) + shiftHours;
+          
+          // Track extended shift consecutive days
+          if (isExtended) {
+            consecutiveExtendedDays[emp.id]++;
+            // If just completed 2 extended shifts, require 1-2 day rest (we use 2)
+            if (consecutiveExtendedDays[emp.id] >= 2) {
+              needsExtendedRest[emp.id] = 2; // 2-on-2-off pattern
+            }
+          } else {
+            // Reset extended counter on non-extended shift
+            consecutiveExtendedDays[emp.id] = 0;
+          }
         }
       }
     }

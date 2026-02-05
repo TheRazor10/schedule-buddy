@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { getMonthName, getDaysInMonth } from '@/data/bulgarianCalendar2026';
 import { exportScheduleToExcel } from '@/utils/excelExport';
+import { calculateShiftHours, formatTimeRange } from '@/utils/shiftUtils';
 import { cn } from '@/lib/utils';
 
 export default function ScheduleView() {
@@ -168,14 +169,19 @@ export default function ScheduleView() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-4">
-              {firmSettings.shifts.map((shift) => (
-                <div key={shift.id} className="flex items-center gap-2">
-                  <div className="flex h-6 w-6 items-center justify-center rounded bg-green-500 text-xs font-bold text-white">
-                    {shift.abbreviation}
+              {firmSettings.shifts.map((shift) => {
+                const shiftHours = calculateShiftHours(shift.startTime, shift.endTime);
+                return (
+                  <div key={shift.id} className="flex items-center gap-2">
+                    <div className="flex h-6 w-6 items-center justify-center rounded bg-green-500 text-xs font-bold text-white">
+                      {shift.abbreviation}
+                    </div>
+                    <span className="text-sm">
+                      {shift.name} ({formatTimeRange(shift.startTime, shift.endTime)}) - {shiftHours}ч
+                    </span>
                   </div>
-                  <span className="text-sm">{shift.name} ({shift.startTime}-{shift.endTime})</span>
-                </div>
-              ))}
+                );
+              })}
               <div className="flex items-center gap-2">
                 <div className="h-6 w-6 rounded bg-red-400" />
                 <span className="text-sm">Почивка</span>
@@ -296,7 +302,11 @@ export default function ScheduleView() {
                               </TooltipTrigger>
                               <TooltipContent>
                                 {entry?.type === 'work' && shift && (
-                                  <p>{shift.name} ({shift.startTime}-{shift.endTime}) - {entry.hours}ч</p>
+                                  <div>
+                                    <p className="font-medium">{shift.name}</p>
+                                    <p>{formatTimeRange(shift.startTime, shift.endTime)}</p>
+                                    <p>{entry.hours}ч работа{entry.overtimeHours && entry.overtimeHours > 0 ? ` (${entry.overtimeHours}ч извънреден)` : ''}</p>
+                                  </div>
                                 )}
                                 {entry?.type === 'work' && !shift && (
                                   <p>Работа ({entry.hours}ч)</p>
