@@ -32,11 +32,169 @@ function getEmployeesByPosition(
 }
 
 /**
+ * Check if a position uses the "handoff" pattern
+ * Handoff pattern: 2 employees, minPerDay=1 → they take turns
+ */
+function isHandoffPosition(position: Position, employeeCount: number): boolean {
+  return employeeCount === 2 && position.minPerDay === 1;
+}
+
+/**
  * Pre-plan rest days for a position to reach target working days
  * Distributes rest days evenly across the month (not consecutive)
- * Ignores coverage constraints - employees get rest regardless of understaffing
+ * For handoff positions (2 employees, minPerDay=1): creates complementary schedules
  */
 function planRestDaysForPosition(
+  positionEmployees: Employee[],
+  position: Position,
+  daysInMonth: number,
+  targetWorkDays: number,
+  holidayDays: Set<number>,
+  worksOnHolidays: boolean,
+  shifts: Shift[]
+): Map<string, Set<number>> {
+  const restDaysMap = new Map<string, Set<number>>();
+  positionEmployees.forEach((emp) => restDaysMap.set(emp.id, new Set<number>()));
+
+  if (positionEmployees.length === 0) return restDaysMap;
+
+  // Check if this is a handoff position (2 employees, minPerDay=1)
+  const useHandoffPattern = isHandoffPosition(position, positionEmployees.length);
+  
+  // Check if any shift is extended (≥10h) for 2-on-2-off pattern
+  const hasExtendedShifts = shifts.some(s => isExtendedShift(s.startTime, s.endTime));
+
+  if (useHandoffPattern) {
+    // HANDOFF PATTERN: Employee A and B take turns
+    // Employee B's schedule = inverse of Employee A's schedule
+    return planHandoffSchedule(
+      positionEmployees,
+      daysInMonth,
+      targetWorkDays,
+      holidayDays,
+      worksOnHolidays,
+      hasExtendedShifts
+    );
+  }
+
+  // Standard scheduling for non-handoff positions
+  return planStandardRestDays(
+    positionEmployees,
+    daysInMonth,
+    targetWorkDays,
+    holidayDays,
+    worksOnHolidays
+  );
+}
+
+/**
+ * Plan handoff schedule for 2 employees taking turns
+ * When Employee A works, Employee B rests (and vice versa)
+ */
+function planHandoffSchedule(
+  employees: Employee[],
+  daysInMonth: number,
+  targetWorkDays: number,
+  holidayDays: Set<number>,
+  worksOnHolidays: boolean,
+  hasExtendedShifts: boolean
+): Map<string, Set<number>> {
+  const restDaysMap = new Map<string, Set<number>>();
+  const [empA, empB] = employees;
+  
+  restDaysMap.set(empA.id, new Set<number>());
+  restDaysMap.set(empB.id, new Set<number>());
+  
+  const restDaysA = restDaysMap.get(empA.id)!;
+  const restDaysB = restDaysMap.get(empB.id)!;
+  
+  // Get workable days (exclude holidays if firm doesn't work)
+  const workableDays: number[] = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    if (!worksOnHolidays && holidayDays.has(day)) continue;
+    workableDays.push(day);
+  }
+  
+  if (hasExtendedShifts) {
+    // 2-on-2-off pattern for extended shifts
+    // Employee A: Work 1-2, Rest 3-4, Work 5-6, Rest 7-8...
+    // Employee B: Rest 1-2, Work 3-4, Rest 5-6, Work 7-8...
+    let dayIndex = 0;
+    let isAWorking = true; // A starts working, B starts resting
+    
+    while (dayIndex < workableDays.length) {
+      // Assign 2 days at a time
+      for (let i = 0; i < 2 && dayIndex < workableDays.length; i++) {
+        const day = workableDays[dayIndex];
+        
+        if (isAWorking) {
+          // A works, B rests
+          restDaysB.add(day);
+        } else {
+          // A rests, B works
+          restDaysA.add(day);
+        }
+        
+        dayIndex++;
+      }
+      
+      // Toggle who's working for next 2-day block
+      isAWorking = !isAWorking;
+    }
+  } else {
+    // Standard alternating pattern for regular shifts
+    // Employee A: Work day 1, Rest day 2, Work day 3...
+    // Employee B: Rest day 1, Work day 2, Rest day 3...
+    for (let i = 0; i < workableDays.length; i++) {
+      const day = workableDays[i];
+      
+      if (i % 2 === 0) {
+        // Even days: A works, B rests
+        restDaysB.add(day);
+      } else {
+        // Odd days: A rests, B works
+        restDaysA.add(day);
+      }
+    }
+  }
+  
+  // Verify both employees meet target work days (adjust if needed)
+  const aWorkDays = workableDays.length - restDaysA.size;
+  const bWorkDays = workableDays.length - restDaysB.size;
+  
+  // If either employee has too many work days, convert some to rest
+  // Priority: meet target while maintaining alternation
+  const adjustRestDays = (empRests: Set<number>, otherRests: Set<number>, currentWorkDays: number) => {
+    if (currentWorkDays <= targetWorkDays) return;
+    
+    const excess = currentWorkDays - targetWorkDays;
+    let added = 0;
+    
+    // Find days where we can add rest without both resting
+    for (const day of workableDays) {
+      if (added >= excess) break;
+      if (!empRests.has(day) && otherRests.has(day)) {
+        // Other is already resting - can't add rest here (both would rest)
+        continue;
+      }
+      if (!empRests.has(day) && !otherRests.has(day)) {
+        // Both working this day - we can rest one, other keeps working
+        empRests.add(day);
+        added++;
+      }
+    }
+  };
+  
+  adjustRestDays(restDaysA, restDaysB, aWorkDays);
+  adjustRestDays(restDaysB, restDaysA, bWorkDays);
+  
+  return restDaysMap;
+}
+
+/**
+ * Standard rest day planning for non-handoff positions
+ */
+function planStandardRestDays(
   positionEmployees: Employee[],
   daysInMonth: number,
   targetWorkDays: number,
@@ -46,10 +204,7 @@ function planRestDaysForPosition(
   const restDaysMap = new Map<string, Set<number>>();
   positionEmployees.forEach((emp) => restDaysMap.set(emp.id, new Set<number>()));
 
-  if (positionEmployees.length === 0) return restDaysMap;
-
   // Calculate how many rest days each employee needs
-  // restDaysNeeded = totalDays - targetWorkDays - holidays (if firm closed)
   const holidayCount = worksOnHolidays ? 0 : holidayDays.size;
   const availableWorkDays = daysInMonth - holidayCount;
   const restDaysNeeded = Math.max(0, availableWorkDays - targetWorkDays);
@@ -68,7 +223,6 @@ function planRestDaysForPosition(
     }
     
     // Calculate ideal spacing between rest days
-    // E.g., if 11 rest days in 31 workable days, space = ~2.8 days between rests
     const spacing = workableDays.length / (restDaysNeeded + 1);
     
     // Assign rest days at regular intervals
@@ -104,7 +258,6 @@ function planRestDaysForPosition(
   }
 
   // Stagger rest days between employees to spread gaps across different days
-  // This helps avoid all employees in a position resting on the same day
   const employeeList = [...positionEmployees];
   for (let i = 1; i < employeeList.length; i++) {
     const empRests = restDaysMap.get(employeeList[i].id)!;
@@ -253,10 +406,12 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
     const positionEmployees = employeesByPosition.get(position.id) || [];
     const restPlan = planRestDaysForPosition(
       positionEmployees,
+      position,
       daysInMonth,
       calendarWorkingDays,
       holidayDays,
-      worksOnHolidays
+      worksOnHolidays,
+      shifts
     );
     
     restPlan.forEach((restDays, empId) => {
