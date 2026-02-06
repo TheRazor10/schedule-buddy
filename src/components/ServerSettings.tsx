@@ -103,7 +103,7 @@ export default function ServerSettings({ onConnectionChange }: ServerSettingsPro
           )}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[450px]">
+      <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Server className="h-5 w-5" />
