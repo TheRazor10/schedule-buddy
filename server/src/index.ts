@@ -14,9 +14,9 @@ const HTTP_PORT = parseInt(process.env.PORT || '3456', 10);
 const HTTPS_PORT = parseInt(process.env.HTTPS_PORT || '3457', 10);
 const USE_HTTPS = process.env.DISABLE_HTTPS !== 'true';
 
-function main(): void {
+async function main(): Promise<void> {
   // Initialize database
-  const db = initDatabase();
+  const db = await initDatabase();
   console.log('[DB] Database initialized');
 
   // Get or create API key

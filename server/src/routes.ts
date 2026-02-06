@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
-import Database from 'better-sqlite3';
+import type { Database } from './database.js';
 import * as db from './database.js';
 
-export function createRoutes(database: Database.Database): Router {
+export function createRoutes(database: Database): Router {
   const router = Router();
 
   // ============ Health Check ============

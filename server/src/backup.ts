@@ -26,12 +26,6 @@ function copyDatabase(suffix: string): string | null {
 
   fs.copyFileSync(dbPath, backupPath);
 
-  // Also copy the WAL file if it exists (ensures backup consistency)
-  const walPath = dbPath + '-wal';
-  if (fs.existsSync(walPath)) {
-    fs.copyFileSync(walPath, backupPath + '-wal');
-  }
-
   return backupPath;
 }
 
@@ -47,12 +41,6 @@ function cleanOldBackups(prefix: string, maxCount: number): void {
   for (let i = maxCount; i < backups.length; i++) {
     const filePath = path.join(BACKUP_DIR, backups[i]);
     fs.unlinkSync(filePath);
-
-    // Also delete WAL file if exists
-    const walPath = filePath + '-wal';
-    if (fs.existsSync(walPath)) {
-      fs.unlinkSync(walPath);
-    }
   }
 }
 
