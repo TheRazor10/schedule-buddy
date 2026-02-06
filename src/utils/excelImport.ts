@@ -2,13 +2,6 @@ import * as XLSX from 'xlsx';
 import { Employee, Position } from '@/types/schedule';
 import { validateEGN, extractBirthDateFromEGN, isMinorFromEGN } from '@/utils/egnUtils';
 
-interface ImportedEmployee {
-  fullName: string;
-  egn: string;
-  contractHours: number;
-  positionName: string;
-}
-
 interface ImportResult {
   employees: Employee[];
   errors: string[];
@@ -80,28 +73,36 @@ export function parseEmployeesFromExcel(
           return;
         }
 
-        // Find the header row — look for a row that contains ЕГН
-        let headerRowIndex = -1;
-        for (let i = 0; i < Math.min(rows.length, 10); i++) {
+        // Search for each column independently across the first 10 rows.
+        // This handles multi-row headers with merged group cells like
+        // "Лични данни" / "Данни за назначение" spanning above the actual columns.
+        let nameCol = -1, nameRow = -1;
+        let egnCol = -1, egnRow = -1;
+        let hoursCol = -1, hoursRow = -1;
+        let positionCol = -1, positionRow = -1;
+
+        const maxScan = Math.min(rows.length, 10);
+        for (let i = 0; i < maxScan; i++) {
           const row = rows[i];
-          if (row && row.some(cell => String(cell || '').toLowerCase().includes('егн'))) {
-            headerRowIndex = i;
-            break;
+          if (!row) continue;
+
+          if (nameCol === -1) {
+            const idx = findColumnIndex(row, ['име, презиме', 'име', 'имена', 'name']);
+            if (idx !== -1) { nameCol = idx; nameRow = i; }
+          }
+          if (egnCol === -1) {
+            const idx = findColumnIndex(row, ['егн', 'egn']);
+            if (idx !== -1) { egnCol = idx; egnRow = i; }
+          }
+          if (hoursCol === -1) {
+            const idx = findColumnIndex(row, ['e-mail', 'email', 'часове', 'hours']);
+            if (idx !== -1) { hoursCol = idx; hoursRow = i; }
+          }
+          if (positionCol === -1) {
+            const idx = findColumnIndex(row, ['длъжност', 'позиция', 'position']);
+            if (idx !== -1) { positionCol = idx; positionRow = i; }
           }
         }
-
-        if (headerRowIndex === -1) {
-          resolve({ employees: [], errors: ['Не е намерен ред с колонка "ЕГН"'], skipped: 0 });
-          return;
-        }
-
-        const headerRow = rows[headerRowIndex];
-
-        // Find column indices by matching header text
-        const nameCol = findColumnIndex(headerRow, ['име, презиме', 'име', 'имена', 'name']);
-        const egnCol = findColumnIndex(headerRow, ['егн', 'egn']);
-        const hoursCol = findColumnIndex(headerRow, ['e-mail', 'email', 'часове', 'hours']);
-        const positionCol = findColumnIndex(headerRow, ['длъжност', 'позиция', 'position']);
 
         if (nameCol === -1 || egnCol === -1) {
           resolve({
@@ -111,6 +112,9 @@ export function parseEmployeesFromExcel(
           });
           return;
         }
+
+        // Data starts after the last header row found
+        const headerRowIndex = Math.max(nameRow, egnRow, hoursRow, positionRow);
 
         const employees: Employee[] = [];
         const errors: string[] = [];
