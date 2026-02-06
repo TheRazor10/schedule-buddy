@@ -1,11 +1,48 @@
-// Persistence layer that works with both localStorage (web) and Electron filesystem
+// Persistence layer that works with:
+// 1. Server mode (centralized SQLite server on LAN)
+// 2. Electron filesystem (local desktop)
+// 3. localStorage (web fallback)
 
 import type { FirmSettings, Employee } from '@/types/schedule';
-import type { FirmListItem, SavedFirmData, AppConfig } from '@/types/electron';
+import type { FirmListItem, SavedFirmData, AppConfig, ServerConfig } from '@/types/electron';
 
 const STORAGE_KEY_PREFIX = 'schedule-buddy-firm-';
 const FIRMS_LIST_KEY = 'schedule-buddy-firms-list';
 const CONFIG_KEY = 'schedule-buddy-config';
+const SERVER_CONFIG_KEY = 'schedule-buddy-server-config';
+
+// ============ Server Config Management ============
+
+export function getServerConfig(): ServerConfig | null {
+  try {
+    const configJson = localStorage.getItem(SERVER_CONFIG_KEY);
+    if (configJson) {
+      const config = JSON.parse(configJson);
+      if (config.serverUrl && config.apiKey) {
+        return config;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to get server config:', e);
+  }
+  return null;
+}
+
+export function setServerConfig(config: ServerConfig | null): void {
+  try {
+    if (config) {
+      localStorage.setItem(SERVER_CONFIG_KEY, JSON.stringify(config));
+    } else {
+      localStorage.removeItem(SERVER_CONFIG_KEY);
+    }
+  } catch (e) {
+    console.error('Failed to set server config:', e);
+  }
+}
+
+export function isServerMode(): boolean {
+  return getServerConfig() !== null;
+}
 
 // Check if running in Electron
 export function isElectron(): boolean {
@@ -38,6 +75,100 @@ export function createNewFirm(id?: string): SavedFirmData {
     createdAt: now,
     updatedAt: now,
   };
+}
+
+// ============ Server Persistence ============
+
+async function serverFetch(path: string, options: RequestInit = {}): Promise<Response> {
+  const config = getServerConfig();
+  if (!config) throw new Error('Server not configured');
+
+  const url = `${config.serverUrl}${path}`;
+  const headers: Record<string, string> = {
+    'x-api-key': config.apiKey,
+    ...((options.headers as Record<string, string>) || {}),
+  };
+
+  if (options.body && typeof options.body === 'string') {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  return response;
+}
+
+async function serverGetAllFirms(): Promise<FirmListItem[]> {
+  const response = await serverFetch('/api/firms');
+  if (!response.ok) throw new Error(`Server error: ${response.status}`);
+  return response.json();
+}
+
+async function serverLoadFirm(firmId: string): Promise<SavedFirmData | null> {
+  const response = await serverFetch(`/api/firms/${encodeURIComponent(firmId)}`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`Server error: ${response.status}`);
+  return response.json();
+}
+
+async function serverSaveFirm(firmData: SavedFirmData): Promise<boolean> {
+  const response = await serverFetch(`/api/firms/${encodeURIComponent(firmData.id)}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      ...firmData,
+      updatedAt: new Date().toISOString(),
+    }),
+  });
+  if (!response.ok) throw new Error(`Server error: ${response.status}`);
+  return true;
+}
+
+async function serverDeleteFirm(firmId: string): Promise<boolean> {
+  const response = await serverFetch(`/api/firms/${encodeURIComponent(firmId)}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok && response.status !== 404) throw new Error(`Server error: ${response.status}`);
+  return true;
+}
+
+async function serverGetConfig(): Promise<AppConfig> {
+  const response = await serverFetch('/api/config');
+  if (!response.ok) throw new Error(`Server error: ${response.status}`);
+  return response.json();
+}
+
+async function serverSetConfig(config: AppConfig): Promise<boolean> {
+  const response = await serverFetch('/api/config', {
+    method: 'PUT',
+    body: JSON.stringify(config),
+  });
+  if (!response.ok) throw new Error(`Server error: ${response.status}`);
+  return true;
+}
+
+// Test server connection
+export async function testServerConnection(serverUrl: string, apiKey: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const response = await fetch(`${serverUrl}/api/health`, {
+      headers: { 'x-api-key': apiKey },
+    });
+
+    if (!response.ok) {
+      return { ok: false, error: `Server responded with status ${response.status}` };
+    }
+
+    const data = await response.json();
+    if (data.status === 'ok') {
+      return { ok: true };
+    }
+
+    return { ok: false, error: 'Unexpected server response' };
+  } catch (e) {
+    return { ok: false, error: `Connection failed: ${(e as Error).message}` };
+  }
 }
 
 // ============ Electron Persistence ============
@@ -175,8 +306,12 @@ function localSetConfig(config: AppConfig): boolean {
 }
 
 // ============ Unified API ============
+// Priority: Server > Electron > localStorage
 
 export async function getAllFirms(): Promise<FirmListItem[]> {
+  if (isServerMode()) {
+    return serverGetAllFirms();
+  }
   if (isElectron()) {
     return electronGetAllFirms();
   }
@@ -184,6 +319,9 @@ export async function getAllFirms(): Promise<FirmListItem[]> {
 }
 
 export async function loadFirm(firmId: string): Promise<SavedFirmData | null> {
+  if (isServerMode()) {
+    return serverLoadFirm(firmId);
+  }
   if (isElectron()) {
     return electronLoadFirm(firmId);
   }
@@ -191,6 +329,9 @@ export async function loadFirm(firmId: string): Promise<SavedFirmData | null> {
 }
 
 export async function saveFirm(firmData: SavedFirmData): Promise<boolean> {
+  if (isServerMode()) {
+    return serverSaveFirm(firmData);
+  }
   if (isElectron()) {
     return electronSaveFirm(firmData);
   }
@@ -198,6 +339,9 @@ export async function saveFirm(firmData: SavedFirmData): Promise<boolean> {
 }
 
 export async function deleteFirm(firmId: string): Promise<boolean> {
+  if (isServerMode()) {
+    return serverDeleteFirm(firmId);
+  }
   if (isElectron()) {
     return electronDeleteFirm(firmId);
   }
@@ -205,6 +349,9 @@ export async function deleteFirm(firmId: string): Promise<boolean> {
 }
 
 export async function getConfig(): Promise<AppConfig> {
+  if (isServerMode()) {
+    return serverGetConfig();
+  }
   if (isElectron()) {
     return electronGetConfig();
   }
@@ -212,6 +359,9 @@ export async function getConfig(): Promise<AppConfig> {
 }
 
 export async function setConfig(config: AppConfig): Promise<boolean> {
+  if (isServerMode()) {
+    return serverSetConfig(config);
+  }
   if (isElectron()) {
     return electronSetConfig(config);
   }
@@ -294,4 +444,11 @@ export function importFirmFromJson(file: File): Promise<SavedFirmData> {
     reader.onerror = () => reject(new Error('Failed to read file'));
     reader.readAsText(file);
   });
+}
+
+// Get current storage mode label
+export function getStorageMode(): 'server' | 'electron' | 'local' {
+  if (isServerMode()) return 'server';
+  if (isElectron()) return 'electron';
+  return 'local';
 }
