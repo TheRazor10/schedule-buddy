@@ -12,6 +12,8 @@ import {
   migrateOldStorage,
   exportFirmToJson,
   importFirmFromJson,
+  setServerConfig,
+  isServerMode,
 } from '@/utils/persistence';
 
 interface AppState {
@@ -136,8 +138,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Try to migrate old storage first
       const migratedFirmId = await migrateOldStorage();
 
-      // Load config and firms list
-      const [config, firms] = await Promise.all([getConfig(), getAllFirms()]);
+      // Load config and firms list, fallback to local mode if server fails
+      let config;
+      let firms;
+      try {
+        [config, firms] = await Promise.all([getConfig(), getAllFirms()]);
+      } catch (err) {
+        console.error('Failed to connect to server, falling back to local mode:', err);
+        if (isServerMode()) {
+          setServerConfig(null);
+        }
+        [config, firms] = await Promise.all([getConfig(), getAllFirms()]);
+      }
       setFirmsList(firms);
 
       // Determine which firm to load
