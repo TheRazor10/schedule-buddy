@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import FirmSelector from './FirmSelector';
+import ServerSettings from './ServerSettings';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface LayoutProps {
@@ -38,8 +39,11 @@ export default function Layout({ children }: LayoutProps) {
         <div className="container mx-auto max-w-4xl px-4 py-3">
           <div className="flex items-center justify-between">
             <FirmSelector />
-            <div className="text-xs text-muted-foreground hidden sm:block">
-              Автоматично запазване
+            <div className="flex items-center gap-2">
+              <ServerSettings onConnectionChange={() => window.location.reload()} />
+              <span className="text-xs text-muted-foreground hidden sm:block">
+                Автоматично запазване
+              </span>
             </div>
           </div>
         </div>

@@ -20,6 +20,11 @@ export interface AppConfig {
   lastFirmId: string | null;
 }
 
+export interface ServerConfig {
+  serverUrl: string;
+  apiKey: string;
+}
+
 export interface ElectronFirmsAPI {
   getAll: () => Promise<FirmListItem[]>;
   load: (firmId: string) => Promise<SavedFirmData | null>;
