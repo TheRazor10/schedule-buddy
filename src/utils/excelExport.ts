@@ -9,10 +9,11 @@ interface ExportOptions {
   positions: Position[];
   shifts: Shift[];
   firmName: string;
+  ownerName: string;
 }
 
 export function exportScheduleToExcel(options: ExportOptions): void {
-  const { schedule, employees, positions, shifts, firmName } = options;
+  const { schedule, employees, positions, shifts, firmName, ownerName } = options;
   const { month, year, employeeSchedules } = schedule;
 
   const daysInMonth = getDaysInMonth(month, year);
@@ -80,8 +81,14 @@ export function exportScheduleToExcel(options: ExportOptions): void {
     data.push(row);
   });
 
-  // Create worksheet
-  const wsData = [headers, ...data];
+  // Create worksheet with firm info header rows
+  const wsData = [
+    ['Фирма:', firmName],
+    ['Собственик:', ownerName],
+    [], // Empty row separator
+    headers,
+    ...data,
+  ];
   const ws = XLSX.utils.aoa_to_sheet(wsData);
 
   // Set column widths

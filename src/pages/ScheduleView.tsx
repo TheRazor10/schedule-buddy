@@ -63,6 +63,7 @@ export default function ScheduleView() {
       positions: firmSettings.positions,
       shifts: firmSettings.shifts,
       firmName: firmSettings.firmName,
+      ownerName: firmSettings.ownerName,
     });
   };
 

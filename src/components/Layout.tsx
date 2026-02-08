@@ -1,7 +1,9 @@
-import { ReactNode } from 'react';
+import { ReactNode, useCallback } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import FirmSelector from './FirmSelector';
+import ServerSettings from './ServerSettings';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getStorageMode } from '@/utils/persistence';
 
 interface LayoutProps {
   children: ReactNode;
@@ -9,6 +11,11 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const { isLoading } = useAppContext();
+
+  const handleConnectionChange = useCallback(() => {
+    // Reload the page to reinitialize with new storage mode
+    window.location.reload();
+  }, []);
 
   if (isLoading) {
     return (
@@ -38,8 +45,11 @@ export default function Layout({ children }: LayoutProps) {
         <div className="container mx-auto max-w-4xl px-4 py-3">
           <div className="flex items-center justify-between">
             <FirmSelector />
-            <div className="text-xs text-muted-foreground hidden sm:block">
-              Автоматично запазване
+            <div className="flex items-center gap-2">
+              <ServerSettings onConnectionChange={handleConnectionChange} />
+              <div className="text-xs text-muted-foreground hidden sm:block">
+                Автоматично запазване
+              </div>
             </div>
           </div>
         </div>
