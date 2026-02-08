@@ -1,136 +1,139 @@
 import { Router, Request, Response } from 'express';
-import type { Database } from './database.js';
-import * as db from './database.js';
+import * as storage from './storage.js';
 
-export function createRoutes(database: Database): Router {
+// Validate path segments to prevent directory traversal
+function isValidSegment(segment: string): boolean {
+  if (!segment || segment.length > 100) return false;
+  if (segment === '.' || segment === '..') return false;
+  if (/[\/\\<>:"|?*\x00-\x1f]/.test(segment)) return false;
+  return true;
+}
+
+export function createRoutes(): Router {
   const router = Router();
 
-  // ============ Health Check ============
-
+  // Health check (no auth required — handled in auth middleware)
   router.get('/api/health', (_req: Request, res: Response) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      apps: storage.listApps(),
+    });
   });
 
-  // ============ Firms ============
+  // List all apps
+  router.get('/api/apps', (_req: Request, res: Response) => {
+    res.json(storage.listApps());
+  });
 
-  // Get all firms (list view)
-  router.get('/api/firms', (_req: Request, res: Response) => {
+  // List all collections for an app
+  router.get('/api/:app', (req: Request, res: Response) => {
+    const { app } = req.params;
+    if (!isValidSegment(app)) {
+      res.status(400).json({ error: 'Invalid app name' });
+      return;
+    }
+    res.json(storage.listCollections(app));
+  });
+
+  // List all items in a collection
+  router.get('/api/:app/:collection', (req: Request, res: Response) => {
+    const { app, collection } = req.params;
+    if (!isValidSegment(app) || !isValidSegment(collection)) {
+      res.status(400).json({ error: 'Invalid app or collection name' });
+      return;
+    }
+
     try {
-      const firms = db.getAllFirms(database);
-      res.json(firms);
+      const items = storage.listItems(app, collection);
+      res.json(items);
     } catch (err) {
-      console.error('Error getting firms:', err);
-      res.status(500).json({ error: 'Failed to get firms' });
+      console.error('Error listing items:', err);
+      res.status(500).json({ error: 'Failed to list items' });
     }
   });
 
-  // Load a specific firm
-  router.get('/api/firms/:id', (req: Request, res: Response) => {
+  // Get a single item
+  router.get('/api/:app/:collection/:id', (req: Request, res: Response) => {
+    const { app, collection, id } = req.params;
+    if (!isValidSegment(app) || !isValidSegment(collection) || !isValidSegment(id)) {
+      res.status(400).json({ error: 'Invalid path parameter' });
+      return;
+    }
+
     try {
-      const firm = db.loadFirm(database, req.params.id);
-      if (!firm) {
-        res.status(404).json({ error: 'Firm not found' });
+      const item = storage.getItem(app, collection, id);
+      if (item === null) {
+        res.status(404).json({ error: 'Item not found' });
         return;
       }
-      res.json(firm);
+      res.json(item);
     } catch (err) {
-      console.error('Error loading firm:', err);
-      res.status(500).json({ error: 'Failed to load firm' });
+      console.error('Error getting item:', err);
+      res.status(500).json({ error: 'Failed to get item' });
     }
   });
 
-  // Save/update a firm
-  router.put('/api/firms/:id', (req: Request, res: Response) => {
+  // Create an item (POST — server can generate ID or use one from body)
+  router.post('/api/:app/:collection', (req: Request, res: Response) => {
+    const { app, collection } = req.params;
+    if (!isValidSegment(app) || !isValidSegment(collection)) {
+      res.status(400).json({ error: 'Invalid app or collection name' });
+      return;
+    }
+
     try {
-      const firmData = req.body;
+      const data = req.body;
+      const id = data?.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      // Basic validation
-      if (!firmData || !firmData.id) {
-        res.status(400).json({ error: 'Invalid firm data: missing id' });
+      if (!isValidSegment(id)) {
+        res.status(400).json({ error: 'Invalid item ID' });
         return;
       }
 
-      if (firmData.id !== req.params.id) {
-        res.status(400).json({ error: 'Firm ID in body does not match URL' });
-        return;
-      }
+      storage.saveItem(app, collection, id, data);
+      res.status(201).json({ success: true, id });
+    } catch (err) {
+      console.error('Error creating item:', err);
+      res.status(500).json({ error: 'Failed to create item' });
+    }
+  });
 
-      if (!firmData.firmSettings) {
-        res.status(400).json({ error: 'Invalid firm data: missing firmSettings' });
-        return;
-      }
+  // Update/create an item with specific ID
+  router.put('/api/:app/:collection/:id', (req: Request, res: Response) => {
+    const { app, collection, id } = req.params;
+    if (!isValidSegment(app) || !isValidSegment(collection) || !isValidSegment(id)) {
+      res.status(400).json({ error: 'Invalid path parameter' });
+      return;
+    }
 
-      if (!Array.isArray(firmData.employees)) {
-        res.status(400).json({ error: 'Invalid firm data: employees must be an array' });
-        return;
-      }
-
-      db.saveFirm(database, firmData);
+    try {
+      storage.saveItem(app, collection, id, req.body);
       res.json({ success: true });
     } catch (err) {
-      console.error('Error saving firm:', err);
-      res.status(500).json({ error: 'Failed to save firm' });
+      console.error('Error saving item:', err);
+      res.status(500).json({ error: 'Failed to save item' });
     }
   });
 
-  // Create a new firm (POST without ID, or POST with body containing ID)
-  router.post('/api/firms', (req: Request, res: Response) => {
-    try {
-      const firmData = req.body;
-
-      if (!firmData || !firmData.id) {
-        res.status(400).json({ error: 'Invalid firm data: missing id' });
-        return;
-      }
-
-      if (!firmData.firmSettings) {
-        res.status(400).json({ error: 'Invalid firm data: missing firmSettings' });
-        return;
-      }
-
-      db.saveFirm(database, firmData);
-      res.status(201).json({ success: true, id: firmData.id });
-    } catch (err) {
-      console.error('Error creating firm:', err);
-      res.status(500).json({ error: 'Failed to create firm' });
+  // Delete an item
+  router.delete('/api/:app/:collection/:id', (req: Request, res: Response) => {
+    const { app, collection, id } = req.params;
+    if (!isValidSegment(app) || !isValidSegment(collection) || !isValidSegment(id)) {
+      res.status(400).json({ error: 'Invalid path parameter' });
+      return;
     }
-  });
 
-  // Delete a firm
-  router.delete('/api/firms/:id', (req: Request, res: Response) => {
     try {
-      const deleted = db.deleteFirm(database, req.params.id);
+      const deleted = storage.deleteItem(app, collection, id);
       if (!deleted) {
-        res.status(404).json({ error: 'Firm not found' });
+        res.status(404).json({ error: 'Item not found' });
         return;
       }
       res.json({ success: true });
     } catch (err) {
-      console.error('Error deleting firm:', err);
-      res.status(500).json({ error: 'Failed to delete firm' });
-    }
-  });
-
-  // ============ Config ============
-
-  router.get('/api/config', (_req: Request, res: Response) => {
-    try {
-      const config = db.getConfig(database);
-      res.json(config);
-    } catch (err) {
-      console.error('Error getting config:', err);
-      res.status(500).json({ error: 'Failed to get config' });
-    }
-  });
-
-  router.put('/api/config', (req: Request, res: Response) => {
-    try {
-      const config = req.body;
-      db.setConfig(database, config);
-      res.json({ success: true });
-    } catch (err) {
-      console.error('Error setting config:', err);
-      res.status(500).json({ error: 'Failed to set config' });
+      console.error('Error deleting item:', err);
+      res.status(500).json({ error: 'Failed to delete item' });
     }
   });
 

@@ -35,7 +35,6 @@ export function getOrCreateApiKey(): string {
     return existing.apiKey;
   }
 
-  // Generate a new API key
   const apiKey = crypto.randomBytes(32).toString('hex');
   saveServerConfig({
     apiKey,

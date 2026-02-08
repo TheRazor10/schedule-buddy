@@ -22,17 +22,17 @@ export function getOrCreateCerts(): CertPaths {
     fs.mkdirSync(CERTS_DIR, { recursive: true });
   }
 
-  const attrs = [{ name: 'commonName', value: 'Schedule Buddy Server' }];
+  const attrs = [{ name: 'commonName', value: 'Office Server' }];
   const pems = selfsigned.generate(attrs, {
-    days: 3650, // Valid for 10 years
+    days: 3650,
     keySize: 2048,
     extensions: [
       {
         name: 'subjectAltName',
         altNames: [
-          { type: 2, value: 'localhost' },    // DNS
-          { type: 7, ip: '127.0.0.1' },       // IP
-          { type: 7, ip: '0.0.0.0' },         // All interfaces
+          { type: 2, value: 'localhost' },
+          { type: 7, ip: '127.0.0.1' },
+          { type: 7, ip: '0.0.0.0' },
         ],
       },
     ],

@@ -46,10 +46,10 @@ export default function Layout({ children }: LayoutProps) {
           <div className="flex items-center justify-between">
             <FirmSelector />
             <div className="flex items-center gap-2">
-              <ServerSettings onConnectionChange={handleConnectionChange} />
-              <div className="text-xs text-muted-foreground hidden sm:block">
+              <ServerSettings onConnectionChange={() => window.location.reload()} />
+              <span className="text-xs text-muted-foreground hidden sm:block">
                 Автоматично запазване
-              </div>
+              </span>
             </div>
           </div>
         </div>

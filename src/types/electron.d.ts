@@ -21,7 +21,7 @@ export interface AppConfig {
 }
 
 export interface ServerConfig {
-  serverUrl: string;  // e.g. "http://192.168.1.50:3456"
+  serverUrl: string;
   apiKey: string;
 }
 

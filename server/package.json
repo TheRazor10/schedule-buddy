@@ -1,7 +1,7 @@
 {
-  "name": "schedule-buddy-server",
+  "name": "office-server",
   "version": "1.0.0",
-  "description": "Schedule Buddy LAN Server - SQLite backend for multi-PC access",
+  "description": "Generic LAN JSON file store server for multiple apps",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,8 +13,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.21.0",
-    "selfsigned": "^2.4.1",
-    "sql.js": "^1.11.0"
+    "selfsigned": "^2.4.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

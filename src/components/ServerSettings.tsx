@@ -44,10 +44,8 @@ export default function ServerSettings({ onConnectionChange }: ServerSettingsPro
 
   const handleTestConnection = async () => {
     if (!serverUrl.trim() || !apiKey.trim()) return;
-
     setIsTesting(true);
     setTestResult(null);
-
     const result = await testServerConnection(serverUrl.trim(), apiKey.trim());
     setTestResult(result);
     setIsTesting(false);
@@ -55,8 +53,6 @@ export default function ServerSettings({ onConnectionChange }: ServerSettingsPro
 
   const handleConnect = async () => {
     if (!serverUrl.trim() || !apiKey.trim()) return;
-
-    // Test first
     setIsTesting(true);
     const result = await testServerConnection(serverUrl.trim(), apiKey.trim());
     setIsTesting(false);
@@ -66,10 +62,7 @@ export default function ServerSettings({ onConnectionChange }: ServerSettingsPro
       return;
     }
 
-    setServerConfig({
-      serverUrl: serverUrl.trim(),
-      apiKey: apiKey.trim(),
-    });
+    setServerConfig({ serverUrl: serverUrl.trim(), apiKey: apiKey.trim() });
     setIsConnected(true);
     setTestResult(null);
     setIsOpen(false);
@@ -93,12 +86,12 @@ export default function ServerSettings({ onConnectionChange }: ServerSettingsPro
           {storageMode === 'server' ? (
             <>
               <Wifi className="h-3.5 w-3.5 text-green-500" />
-              <span className="hidden sm:inline">Сървър</span>
+              <span className="hidden sm:inline">Server</span>
             </>
           ) : (
             <>
               <HardDrive className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Локално</span>
+              <span className="hidden sm:inline">Local</span>
             </>
           )}
         </Button>
@@ -107,33 +100,31 @@ export default function ServerSettings({ onConnectionChange }: ServerSettingsPro
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Server className="h-5 w-5" />
-            Настройки на сървъра
+            Server Settings
           </DialogTitle>
           <DialogDescription>
-            Свържете се с централен сървър за споделен достъп до данните от няколко компютъра.
+            Connect to the office server for shared data access across multiple PCs.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Current status */}
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Текущ режим:</span>
+            <span className="text-sm text-muted-foreground">Current mode:</span>
             {isConnected ? (
               <Badge variant="default" className="bg-green-600">
                 <Wifi className="h-3 w-3 mr-1" />
-                Свързан към сървър
+                Connected to Server
               </Badge>
             ) : (
               <Badge variant="secondary">
                 <HardDrive className="h-3 w-3 mr-1" />
-                Локално съхранение
+                Local Storage
               </Badge>
             )}
           </div>
 
-          {/* Server URL */}
           <div className="space-y-2">
-            <Label htmlFor="server-url">Адрес на сървъра</Label>
+            <Label htmlFor="server-url">Server URL</Label>
             <Input
               id="server-url"
               placeholder="http://192.168.1.50:3456"
@@ -144,17 +135,16 @@ export default function ServerSettings({ onConnectionChange }: ServerSettingsPro
               }}
             />
             <p className="text-xs text-muted-foreground">
-              IP адресът и портът на компютъра, на който работи сървърът.
+              The IP address and port of the PC running the server.
             </p>
           </div>
 
-          {/* API Key */}
           <div className="space-y-2">
-            <Label htmlFor="api-key">API ключ</Label>
+            <Label htmlFor="api-key">API Key</Label>
             <Input
               id="api-key"
               type="password"
-              placeholder="Въведете API ключа от сървъра"
+              placeholder="Enter the API key from the server"
               value={apiKey}
               onChange={(e) => {
                 setApiKey(e.target.value);
@@ -162,11 +152,10 @@ export default function ServerSettings({ onConnectionChange }: ServerSettingsPro
               }}
             />
             <p className="text-xs text-muted-foreground">
-              Ключът се показва при стартиране на сървъра.
+              The key is shown when the server starts up.
             </p>
           </div>
 
-          {/* Test result */}
           {testResult && (
             <div className={`rounded-md p-3 text-sm ${
               testResult.ok
@@ -174,8 +163,8 @@ export default function ServerSettings({ onConnectionChange }: ServerSettingsPro
                 : 'bg-red-50 text-red-800 border border-red-200'
             }`}>
               {testResult.ok
-                ? 'Връзката е успешна!'
-                : `Грешка: ${testResult.error}`
+                ? 'Connection successful!'
+                : `Error: ${testResult.error}`
               }
             </div>
           )}
@@ -189,7 +178,7 @@ export default function ServerSettings({ onConnectionChange }: ServerSettingsPro
               className="sm:mr-auto"
             >
               <WifiOff className="h-4 w-4 mr-2" />
-              Прекъсни връзката
+              Disconnect
             </Button>
           )}
           <Button
@@ -202,7 +191,7 @@ export default function ServerSettings({ onConnectionChange }: ServerSettingsPro
             ) : (
               <Wifi className="h-4 w-4 mr-2" />
             )}
-            Тест
+            Test
           </Button>
           <Button
             onClick={handleConnect}
@@ -213,7 +202,7 @@ export default function ServerSettings({ onConnectionChange }: ServerSettingsPro
             ) : (
               <Server className="h-4 w-4 mr-2" />
             )}
-            Свържи
+            Connect
           </Button>
         </DialogFooter>
       </DialogContent>

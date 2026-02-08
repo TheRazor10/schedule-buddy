@@ -3,7 +3,7 @@ import cors from 'cors';
 import https from 'https';
 import http from 'http';
 import fs from 'fs';
-import { initDatabase } from './database.js';
+import { ensureDataDir } from './storage.js';
 import { createRoutes } from './routes.js';
 import { apiKeyAuth, getOrCreateApiKey } from './auth.js';
 import { requestLogger } from './logger.js';
@@ -15,9 +15,9 @@ const HTTPS_PORT = parseInt(process.env.HTTPS_PORT || '3457', 10);
 const USE_HTTPS = process.env.DISABLE_HTTPS !== 'true';
 
 async function main(): Promise<void> {
-  // Initialize database
-  const db = await initDatabase();
-  console.log('[DB] Database initialized');
+  // Ensure data directory exists
+  ensureDataDir();
+  console.log('[Storage] Data directory ready');
 
   // Get or create API key
   const apiKey = getOrCreateApiKey();
@@ -32,7 +32,7 @@ async function main(): Promise<void> {
   app.use(apiKeyAuth(apiKey));
 
   // Routes
-  app.use(createRoutes(db));
+  app.use(createRoutes());
 
   // Start HTTP server
   const httpServer = http.createServer(app);
@@ -64,7 +64,7 @@ async function main(): Promise<void> {
 
   // Print connection info
   console.log('\n========================================');
-  console.log('  Schedule Buddy Server is running!');
+  console.log('  Office Server is running!');
   console.log('========================================');
   console.log(`  HTTP:    http://0.0.0.0:${HTTP_PORT}`);
   if (USE_HTTPS) {
@@ -72,15 +72,14 @@ async function main(): Promise<void> {
   }
   console.log(`  API Key: ${apiKey}`);
   console.log('');
-  console.log('  Enter this API key in the Electron app');
-  console.log('  settings to connect to this server.');
+  console.log('  Use this API key in your apps to');
+  console.log('  connect to this server.');
   console.log('========================================\n');
 
   // Graceful shutdown
   function shutdown(): void {
     console.log('\n[Server] Shutting down...');
     stopBackupSchedule();
-    db.close();
     httpServer.close();
     process.exit(0);
   }
