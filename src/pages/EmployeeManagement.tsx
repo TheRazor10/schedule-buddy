@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
@@ -21,9 +21,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Users, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, AlertTriangle, Check } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Users, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, AlertTriangle, Check, Upload, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { Employee } from '@/types/schedule';
 import { validateEGN, extractBirthDateFromEGN, isMinorFromEGN } from '@/utils/egnUtils';
+import { parseEmployeesFromExcel } from '@/utils/excelImport';
 
 export default function EmployeeManagement() {
   const navigate = useNavigate();
@@ -37,6 +47,47 @@ export default function EmployeeManagement() {
   const [contractHours, setContractHours] = useState<string>('8');
   const [egnError, setEgnError] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Excel import state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importedEmployees, setImportedEmployees] = useState<Employee[]>([]);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [importSkipped, setImportSkipped] = useState(0);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    try {
+      const result = await parseEmployeesFromExcel(file, firmSettings.positions);
+      setImportedEmployees(result.employees);
+      setImportErrors(result.errors);
+      setImportSkipped(result.skipped);
+      setImportDialogOpen(true);
+    } catch {
+      setImportErrors(['Грешка при четене на файла']);
+      setImportedEmployees([]);
+      setImportSkipped(0);
+      setImportDialogOpen(true);
+    } finally {
+      setIsImporting(false);
+      // Reset file input so same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleConfirmImport = () => {
+    for (const emp of importedEmployees) {
+      addEmployee(emp);
+    }
+    setImportDialogOpen(false);
+    setImportedEmployees([]);
+    setImportErrors([]);
+    setImportSkipped(0);
+  };
 
   const handleEgnChange = (value: string) => {
     // Only allow digits
@@ -300,7 +351,30 @@ export default function EmployeeManagement() {
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span>Списък със служители</span>
-                <Badge variant="secondary">{employees.length} служители</Badge>
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xls,.xlsx"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isImporting}
+                    className="gap-1.5"
+                  >
+                    {isImporting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                    Импорт от Excel
+                  </Button>
+                  <Badge variant="secondary">{employees.length} служители</Badge>
+                </div>
               </CardTitle>
               <CardDescription>
                 Преглед и управление на добавените служители
@@ -399,6 +473,112 @@ export default function EmployeeManagement() {
             <ArrowRight className="h-4 w-4" />
           </Button>
         </div>
+
+        {/* Import Results Dialog */}
+        <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileSpreadsheet className="h-5 w-5" />
+                Резултат от импорта
+              </DialogTitle>
+              <DialogDescription>
+                Прегледайте намерените служители преди да ги добавите
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              {/* Summary */}
+              <div className="flex flex-wrap gap-3">
+                <Badge variant="default" className="bg-green-600">
+                  <Check className="h-3 w-3 mr-1" />
+                  {importedEmployees.length} намерени
+                </Badge>
+                {importSkipped > 0 && (
+                  <Badge variant="secondary">
+                    {importSkipped} пропуснати
+                  </Badge>
+                )}
+                {importErrors.length > 0 && (
+                  <Badge variant="destructive">
+                    <AlertTriangle className="h-3 w-3 mr-1" />
+                    {importErrors.length} грешки
+                  </Badge>
+                )}
+              </div>
+
+              {/* Errors */}
+              {importErrors.length > 0 && (
+                <div className="rounded-md border border-red-200 bg-red-50 p-3">
+                  <p className="text-sm font-medium text-red-800 mb-1">Грешки:</p>
+                  <ScrollArea className="max-h-24">
+                    <ul className="text-sm text-red-700 space-y-0.5">
+                      {importErrors.map((err, i) => (
+                        <li key={i}>{err}</li>
+                      ))}
+                    </ul>
+                  </ScrollArea>
+                </div>
+              )}
+
+              {/* Preview table */}
+              {importedEmployees.length > 0 && (
+                <ScrollArea className="max-h-64">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Име</TableHead>
+                        <TableHead>ЕГН</TableHead>
+                        <TableHead className="text-center">Часове</TableHead>
+                        <TableHead>Позиция</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {importedEmployees.map((emp) => (
+                        <TableRow key={emp.id}>
+                          <TableCell className="font-medium">
+                            {emp.firstName} {emp.lastName}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {emp.egn}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline">{emp.contractHours}ч</Badge>
+                          </TableCell>
+                          <TableCell>
+                            {emp.positionId ? getPositionName(emp.positionId) : (
+                              <span className="text-muted-foreground text-xs">Не е зададена</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              )}
+
+              {importedEmployees.length === 0 && importErrors.length === 0 && (
+                <div className="text-center py-6 text-muted-foreground">
+                  Не са намерени служители във файла
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
+                Отказ
+              </Button>
+              <Button
+                onClick={handleConfirmImport}
+                disabled={importedEmployees.length === 0}
+                className="gap-1.5"
+              >
+                <Plus className="h-4 w-4" />
+                Добави {importedEmployees.length} служители
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
   );
 }

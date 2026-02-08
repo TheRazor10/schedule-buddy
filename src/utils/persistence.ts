@@ -423,3 +423,10 @@ export function importFirmFromJson(file: File): Promise<SavedFirmData> {
     reader.readAsText(file);
   });
 }
+
+// Get current storage mode label
+export function getStorageMode(): 'server' | 'electron' | 'local' {
+  if (isServerMode()) return 'server';
+  if (isElectron()) return 'electron';
+  return 'local';
+}

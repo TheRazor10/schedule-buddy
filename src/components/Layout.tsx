@@ -1,8 +1,9 @@
-import { ReactNode } from 'react';
+import { ReactNode, useCallback } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import FirmSelector from './FirmSelector';
 import ServerSettings from './ServerSettings';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getStorageMode } from '@/utils/persistence';
 
 interface LayoutProps {
   children: ReactNode;
@@ -10,6 +11,11 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const { isLoading } = useAppContext();
+
+  const handleConnectionChange = useCallback(() => {
+    // Reload the page to reinitialize with new storage mode
+    window.location.reload();
+  }, []);
 
   if (isLoading) {
     return (
