@@ -9,6 +9,7 @@ import {
 } from '@/types/schedule';
 import { getMonthData, getDaysInMonth, isHoliday } from '@/data/bulgarianCalendar2026';
 import { calculateShiftHours, isExtendedShift, calculateOvertime, calculateNetShiftHours } from '@/utils/shiftUtils';
+import { isMinorFromBirthDate } from '@/utils/egnUtils';
 
 interface ScheduleGeneratorOptions {
   firmSettings: FirmSettings;
@@ -515,20 +516,21 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
         const empSchedule = scheduleMap.get(emp.id)!;
         const plannedRest = plannedRestDays.get(emp.id) || new Set();
         
-        // Check legal constraints
-        const weeklyLimit = emp.isMinor ? 35 : 56;
+        // Check legal constraints - calculate minor status dynamically for THIS day
+        const empIsMinorToday = isMinorFromBirthDate(new Date(emp.birthDate), currentDate);
+        const weeklyLimit = empIsMinorToday ? 35 : 56;
         const currentWeekHours = weeklyHours[emp.id][weekIndex] || 0;
-        
+
         // Check if employee needs rest after extended shift block
         const needsExtendedRestDays = needsExtendedRest[emp.id] > 0;
-        
+
         // Check if employee has worked 2 consecutive extended shifts (max allowed)
         const maxExtendedReached = consecutiveExtendedDays[emp.id] >= 2;
 
-        const mustRestLegal = 
+        const mustRestLegal =
           consecutiveWorkDays[emp.id] >= 6 ||
           currentWeekHours >= weeklyLimit ||
-          (isHolidayDay && emp.isMinor) ||
+          (isHolidayDay && empIsMinorToday) ||
           needsExtendedRestDays ||  // Must rest after extended shift block
           maxExtendedReached;       // Must rest after 2 consecutive extended shifts
 
@@ -634,9 +636,11 @@ export function generateSchedule(options: ScheduleGeneratorOptions): MonthSchedu
       issues.push(`Часовете (${empSchedule.totalHours}ч) надвишават целевите (${empTargetHours}ч)`);
     }
 
-    // Check weekly hour limits
+    // Check weekly hour limits - use last day of month as reference for minor status
     const empWeeklyHours = weeklyHours[employee.id];
-    const weeklyLimit = employee.isMinor ? 35 : 56;
+    const endOfMonth = new Date(year, month, 0); // last day of the schedule month
+    const empIsMinorEndOfMonth = isMinorFromBirthDate(new Date(employee.birthDate), endOfMonth);
+    const weeklyLimit = empIsMinorEndOfMonth ? 35 : 56;
     empWeeklyHours.forEach((hours, week) => {
       if (hours > weeklyLimit) {
         issues.push(`Седмица ${week + 1}: ${hours}ч надвишава лимита от ${weeklyLimit}ч`);

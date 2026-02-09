@@ -179,6 +179,7 @@ export function parseEmployeesFromExcel(
             firstName,
             lastName,
             egn: egnValue,
+            idType: 'egn',
             positionId,
             contractHours: finalContractHours,
             isMinor,
