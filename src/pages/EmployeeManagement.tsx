@@ -31,8 +31,8 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Users, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, AlertTriangle, Check, Upload, FileSpreadsheet, Loader2 } from 'lucide-react';
-import { Employee } from '@/types/schedule';
-import { validateEGN, extractBirthDateFromEGN, isMinorFromEGN } from '@/utils/egnUtils';
+import { Employee, IdType } from '@/types/schedule';
+import { validateId, extractBirthDateFromEGN, isMinorFromBirthDate } from '@/utils/egnUtils';
 import { parseEmployeesFromExcel } from '@/utils/excelImport';
 
 export default function EmployeeManagement() {
@@ -43,6 +43,8 @@ export default function EmployeeManagement() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [egn, setEgn] = useState('');
+  const [idType, setIdType] = useState<IdType>('egn');
+  const [manualBirthDate, setManualBirthDate] = useState('');
   const [positionId, setPositionId] = useState('');
   const [contractHours, setContractHours] = useState<string>('8');
   const [egnError, setEgnError] = useState('');
@@ -74,7 +76,6 @@ export default function EmployeeManagement() {
       setImportDialogOpen(true);
     } finally {
       setIsImporting(false);
-      // Reset file input so same file can be re-selected
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -89,31 +90,62 @@ export default function EmployeeManagement() {
     setImportSkipped(0);
   };
 
-  const handleEgnChange = (value: string) => {
-    // Only allow digits
-    const cleaned = value.replace(/\D/g, '').slice(0, 10);
-    setEgn(cleaned);
-    
-    if (cleaned.length === 10) {
-      const validation = validateEGN(cleaned);
-      setEgnError(validation.valid ? '' : validation.error || 'Невалидно ЕГН');
-      
-      // Auto-adjust contract hours for minors (max 7 hours)
-      if (validation.valid) {
-        const isMinor = isMinorFromEGN(cleaned, new Date(2026, 0, 1));
-        if (isMinor && parseInt(contractHours) > 7) {
-          setContractHours('7');
+  // Get birth date from the current form state
+  const getBirthDateFromForm = (): Date | null => {
+    if (idType === 'egn') {
+      return extractBirthDateFromEGN(egn);
+    }
+    if (manualBirthDate) {
+      const date = new Date(manualBirthDate);
+      return isNaN(date.getTime()) ? null : date;
+    }
+    return null;
+  };
+
+  // Check minor status from current form state
+  const getIsMinorFromForm = (): boolean => {
+    const birthDate = getBirthDateFromForm();
+    if (!birthDate) return false;
+    return isMinorFromBirthDate(birthDate);
+  };
+
+  const handleIdChange = (value: string) => {
+    if (idType === 'egn' || idType === 'lnch') {
+      const cleaned = value.replace(/\D/g, '').slice(0, 10);
+      setEgn(cleaned);
+
+      if (cleaned.length === 10) {
+        const validation = validateId(cleaned, idType);
+        setEgnError(validation.valid ? '' : validation.error || 'Невалиден номер');
+
+        if (validation.valid && idType === 'egn') {
+          const birthDate = extractBirthDateFromEGN(cleaned);
+          if (birthDate && isMinorFromBirthDate(birthDate) && parseInt(contractHours) > 7) {
+            setContractHours('7');
+          }
         }
+      } else {
+        setEgnError('');
       }
     } else {
+      setEgn(value);
       setEgnError('');
     }
+  };
+
+  const handleIdTypeChange = (newType: IdType) => {
+    setIdType(newType);
+    setEgn('');
+    setEgnError('');
+    setManualBirthDate('');
   };
 
   const resetForm = () => {
     setFirstName('');
     setLastName('');
     setEgn('');
+    setIdType('egn');
+    setManualBirthDate('');
     setPositionId('');
     setContractHours('8');
     setEgnError('');
@@ -122,21 +154,28 @@ export default function EmployeeManagement() {
 
   const handleSubmit = () => {
     if (!firstName.trim() || !lastName.trim() || !egn || !positionId) return;
-    
-    const validation = validateEGN(egn);
+
+    const validation = validateId(egn, idType);
     if (!validation.valid) {
-      setEgnError(validation.error || 'Невалидно ЕГН');
+      setEgnError(validation.error || 'Невалиден номер');
       return;
     }
 
-    const birthDate = extractBirthDateFromEGN(egn);
-    const isMinor = isMinorFromEGN(egn, new Date(2026, 0, 1)); // Check as of 2026
+    // For non-EGN types, birth date is required
+    if (idType !== 'egn' && !manualBirthDate) {
+      setEgnError('Въведете дата на раждане');
+      return;
+    }
+
+    const birthDate = getBirthDateFromForm();
+    const isMinor = birthDate ? isMinorFromBirthDate(birthDate) : false;
 
     const employeeData: Employee = {
       id: editingId || crypto.randomUUID(),
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       egn,
+      idType,
       positionId,
       contractHours: parseInt(contractHours) as 2 | 4 | 6 | 7 | 8 | 10 | 12,
       isMinor,
@@ -156,6 +195,15 @@ export default function EmployeeManagement() {
     setFirstName(employee.firstName);
     setLastName(employee.lastName);
     setEgn(employee.egn);
+    setIdType(employee.idType || 'egn');
+    if (employee.idType && employee.idType !== 'egn' && employee.birthDate) {
+      const d = new Date(employee.birthDate);
+      if (!isNaN(d.getTime())) {
+        setManualBirthDate(d.toISOString().split('T')[0]);
+      }
+    } else {
+      setManualBirthDate('');
+    }
     setPositionId(employee.positionId);
     setContractHours(employee.contractHours.toString());
     setEditingId(employee.id);
@@ -166,14 +214,27 @@ export default function EmployeeManagement() {
     return position?.name || '—';
   };
 
+  const isIdValid = (() => {
+    if (idType === 'egn' || idType === 'lnch') {
+      return egn.length === 10 && !egnError;
+    }
+    return egn.trim().length > 0 && !egnError;
+  })();
+
+  const needsBirthDate = idType !== 'egn';
+  const hasBirthDate = idType === 'egn' || !!manualBirthDate;
+
   const isFormValid =
     firstName.trim() &&
     lastName.trim() &&
-    egn.length === 10 &&
-    !egnError &&
+    isIdValid &&
+    hasBirthDate &&
     positionId;
 
   const canContinue = employees.length > 0;
+  const formIsMinor = getIsMinorFromForm();
+
+  const idTypeLabel = idType === 'egn' ? 'ЕГН' : idType === 'lnch' ? 'ЛНЧ' : 'Друг номер';
 
   return (
     <div className="container mx-auto max-w-5xl px-4 py-8">
@@ -238,23 +299,37 @@ export default function EmployeeManagement() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="egn">ЕГН *</Label>
+                <Label>Тип документ *</Label>
+                <Select value={idType} onValueChange={(v) => handleIdTypeChange(v as IdType)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="egn">ЕГН (Единен граждански номер)</SelectItem>
+                    <SelectItem value="lnch">ЛНЧ (Личен номер на чужденец)</SelectItem>
+                    <SelectItem value="other">Друг документ</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="egn">{idTypeLabel} *</Label>
                 <Input
                   id="egn"
                   value={egn}
-                  onChange={(e) => handleEgnChange(e.target.value)}
-                  placeholder="0000000000"
-                  maxLength={10}
+                  onChange={(e) => handleIdChange(e.target.value)}
+                  placeholder={idType === 'other' ? 'Номер на документ' : '0000000000'}
+                  maxLength={idType === 'other' ? 50 : 10}
                   className={egnError ? 'border-destructive' : ''}
                 />
                 {egnError && (
                   <p className="text-sm text-destructive">{egnError}</p>
                 )}
-                {egn.length === 10 && !egnError && (
+                {isIdValid && idType === 'egn' && (
                   <div className="flex items-center gap-2 text-sm">
                     <Check className="h-4 w-4 text-green-600" />
                     <span className="text-muted-foreground">
-                      {isMinorFromEGN(egn, new Date(2026, 0, 1)) ? (
+                      {formIsMinor ? (
                         <span className="text-amber-600">Непълнолетен (под 18)</span>
                       ) : (
                         'Пълнолетен'
@@ -263,6 +338,31 @@ export default function EmployeeManagement() {
                   </div>
                 )}
               </div>
+
+              {needsBirthDate && (
+                <div className="space-y-2">
+                  <Label htmlFor="birthDate">Дата на раждане *</Label>
+                  <Input
+                    id="birthDate"
+                    type="date"
+                    value={manualBirthDate}
+                    onChange={(e) => setManualBirthDate(e.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                  />
+                  {manualBirthDate && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Check className="h-4 w-4 text-green-600" />
+                      <span className="text-muted-foreground">
+                        {formIsMinor ? (
+                          <span className="text-amber-600">Непълнолетен (под 18)</span>
+                        ) : (
+                          'Пълнолетен'
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="position">Позиция *</Label>
@@ -288,45 +388,37 @@ export default function EmployeeManagement() {
 
               <div className="space-y-2">
                 <Label htmlFor="contractHours">Договорни часове *</Label>
-                {(() => {
-                  const isMinor = egn.length === 10 && !egnError && isMinorFromEGN(egn, new Date(2026, 0, 1));
-                  return (
-                    <>
-                      <Select 
-                        value={contractHours} 
-                        onValueChange={(value) => {
-                          // Prevent minors from selecting more than 7 hours
-                          if (isMinor && parseInt(value) > 7) return;
-                          setContractHours(value);
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="12" disabled={isMinor}>
-                            12 часа {isMinor && '— недостъпно за непълнолетни'}
-                          </SelectItem>
-                          <SelectItem value="10" disabled={isMinor}>
-                            10 часа {isMinor && '— недостъпно за непълнолетни'}
-                          </SelectItem>
-                          <SelectItem value="8" disabled={isMinor}>
-                            8 часа {isMinor && '— недостъпно за непълнолетни'}
-                          </SelectItem>
-                          <SelectItem value="7">7 часа</SelectItem>
-                          <SelectItem value="6">6 часа</SelectItem>
-                          <SelectItem value="4">4 часа</SelectItem>
-                          <SelectItem value="2">2 часа</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {isMinor && (
-                        <p className="text-xs text-amber-600">
-                          Непълнолетните служители могат да работят максимум 7 часа на ден
-                        </p>
-                      )}
-                    </>
-                  );
-                })()}
+                <Select
+                  value={contractHours}
+                  onValueChange={(value) => {
+                    if (formIsMinor && parseInt(value) > 7) return;
+                    setContractHours(value);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="12" disabled={formIsMinor}>
+                      12 часа {formIsMinor && '— недостъпно за непълнолетни'}
+                    </SelectItem>
+                    <SelectItem value="10" disabled={formIsMinor}>
+                      10 часа {formIsMinor && '— недостъпно за непълнолетни'}
+                    </SelectItem>
+                    <SelectItem value="8" disabled={formIsMinor}>
+                      8 часа {formIsMinor && '— недостъпно за непълнолетни'}
+                    </SelectItem>
+                    <SelectItem value="7">7 часа</SelectItem>
+                    <SelectItem value="6">6 часа</SelectItem>
+                    <SelectItem value="4">4 часа</SelectItem>
+                    <SelectItem value="2">2 часа</SelectItem>
+                  </SelectContent>
+                </Select>
+                {formIsMinor && (
+                  <p className="text-xs text-amber-600">
+                    Непълнолетните служители могат да работят максимум 7 часа на ден
+                  </p>
+                )}
               </div>
 
               <div className="flex gap-2">
@@ -528,7 +620,7 @@ export default function EmployeeManagement() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Име</TableHead>
-                        <TableHead>ЕГН</TableHead>
+                        <TableHead>ЕГН/ЛНЧ</TableHead>
                         <TableHead className="text-center">Часове</TableHead>
                         <TableHead>Позиция</TableHead>
                       </TableRow>

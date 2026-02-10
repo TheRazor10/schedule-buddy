@@ -1,4 +1,6 @@
-// Bulgarian EGN (ЕГН) validation and parsing utilities
+// Bulgarian EGN (ЕГН) and ЛНЧ validation and parsing utilities
+
+import type { IdType } from '@/types/schedule';
 
 /**
  * Validates a Bulgarian EGN (Единен граждански номер)
@@ -36,6 +38,51 @@ export function validateEGN(egn: string): { valid: boolean; error?: string } {
   }
 
   return { valid: true };
+}
+
+/**
+ * Validates a Bulgarian ЛНЧ (Личен номер на чужденец)
+ * ЛНЧ is 10 digits, uses the same checksum as EGN but does NOT encode birth date.
+ */
+export function validateLNCH(lnch: string): { valid: boolean; error?: string } {
+  if (!/^\d{10}$/.test(lnch)) {
+    return { valid: false, error: 'ЛНЧ трябва да бъде точно 10 цифри' };
+  }
+
+  const weights = [21, 19, 17, 13, 11, 9, 7, 3, 1];
+  const digits = lnch.split('').map(Number);
+
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    sum += digits[i] * weights[i];
+  }
+  const expectedCheckDigit = sum % 10;
+
+  if (digits[9] !== expectedCheckDigit) {
+    return { valid: false, error: 'Невалидна контролна цифра' };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Validates an ID based on its type
+ */
+export function validateId(id: string, idType: IdType): { valid: boolean; error?: string } {
+  if (!id.trim()) {
+    return { valid: false, error: 'Полето е задължително' };
+  }
+
+  switch (idType) {
+    case 'egn':
+      return validateEGN(id);
+    case 'lnch':
+      return validateLNCH(id);
+    case 'other':
+      return id.trim().length >= 1
+        ? { valid: true }
+        : { valid: false, error: 'Въведете идентификационен номер' };
+  }
 }
 
 /**
@@ -99,6 +146,27 @@ export function calculateAgeFromEGN(egn: string, asOfDate: Date = new Date()): n
 export function isMinorFromEGN(egn: string, asOfDate: Date = new Date()): boolean {
   const age = calculateAgeFromEGN(egn, asOfDate);
   return age !== null && age < 18;
+}
+
+/**
+ * Calculate age from a birth date as of a specific date
+ */
+export function calculateAgeFromBirthDate(birthDate: Date, asOfDate: Date = new Date()): number {
+  let age = asOfDate.getFullYear() - birthDate.getFullYear();
+  const monthDiff = asOfDate.getMonth() - birthDate.getMonth();
+
+  if (monthDiff < 0 || (monthDiff === 0 && asOfDate.getDate() < birthDate.getDate())) {
+    age--;
+  }
+
+  return age;
+}
+
+/**
+ * Check if person is a minor (under 18) based on birth date, as of a specific date
+ */
+export function isMinorFromBirthDate(birthDate: Date, asOfDate: Date = new Date()): boolean {
+  return calculateAgeFromBirthDate(birthDate, asOfDate) < 18;
 }
 
 /**

@@ -26,15 +26,18 @@ export interface FirmSettings {
   shifts: Shift[];
 }
 
+export type IdType = 'egn' | 'lnch' | 'other';
+
 export interface Employee {
   id: string;
   firstName: string;
   lastName: string;
-  egn: string;          // 10-digit Bulgarian ID
+  egn: string;          // ID number (EGN, ЛНЧ, or other)
+  idType: IdType;       // Type of ID document
   positionId: string;   // Reference to Position
   contractHours: 2 | 4 | 6 | 7 | 8 | 10 | 12;
-  isMinor: boolean;     // Calculated from EGN
-  birthDate: Date;      // Extracted from EGN
+  isMinor: boolean;     // Calculated from birth date
+  birthDate: Date;      // Extracted from EGN/ЛНЧ or entered manually
 }
 
 export type ScheduleEntryType = 'work' | 'rest' | 'holiday';
